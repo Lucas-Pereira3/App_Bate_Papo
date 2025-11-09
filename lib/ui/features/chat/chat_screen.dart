@@ -72,7 +72,16 @@ class _ChatScreenState extends State<ChatScreen> {
     
     _messagesSubscription = chatService.subscribeMessages(_conversationId).listen(
       (newMessages) {
-        print('📨 Nova mensagem recebida via stream. Total: ${newMessages.length}');
+        print('🔄 Subscription atualizada: ${newMessages.length} mensagens');
+        
+        // VERIFICAR MENSAGENS REMOVIDAS
+        final currentMessageIds = _messages.map((m) => m.id).toSet();
+        final newMessageIds = newMessages.map((m) => m.id).toSet();
+        final removedMessageIds = currentMessageIds.difference(newMessageIds);
+        
+        if (removedMessageIds.isNotEmpty) {
+          print('🗑️ Mensagens removidas na subscription: $removedMessageIds');
+        }
         
         setState(() {
           _messages = newMessages;
@@ -180,11 +189,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _textController.clear();
       _stopTyping();
       
-      _showSuccessSnackbar('Enviando mensagem...');
-      
       await chatService.sendTextMessage(_conversationId, userId, text);
-      
-      print('✅ Mensagem enviada com sucesso');
       
     } catch (e) {
       print('❌ Erro ao enviar mensagem: $e');
@@ -212,8 +217,6 @@ class _ChatScreenState extends State<ChatScreen> {
           return;
         }
         
-        _showSuccessSnackbar('Enviando imagem...');
-        
         await chatService.sendImageMessage(_conversationId, userId, bytes, image.name);
         
         _showSuccessSnackbar('Imagem enviada!');
@@ -222,6 +225,20 @@ class _ChatScreenState extends State<ChatScreen> {
       print('❌ Erro ao enviar imagem: $e');
       _showErrorSnackbar('Erro ao enviar imagem: $e');
     }
+  }
+
+  // MÉTODO CORRIGIDO: Remover mensagem localmente
+  void _removeMessageLocally(String messageId) {
+    setState(() {
+      _messages.removeWhere((message) => message.id == messageId);
+    });
+  }
+
+  // MÉTODO CORRIGIDO: Forçar refresh completo
+  Future<void> _forceRefreshMessages() async {
+    _messagesSubscription?.cancel();
+    await _loadInitialMessages();
+    _subscribeToMessages();
   }
 
   void _showMessageOptions(Message message) {
@@ -244,10 +261,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 _editMessage(message);
               },
             ),
-          if (isMyMessage && !message.isDeleted)
+          if (isMyMessage)
             ListTile(
-              leading: Icon(Icons.delete),
-              title: Text('Excluir mensagem'),
+              leading: Icon(Icons.delete, color: Colors.red),
+              title: Text('Excluir mensagem', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(context);
                 _deleteMessage(message);
@@ -298,6 +315,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 try {
                   final chatService = Provider.of<ChatService>(context, listen: false);
                   await chatService.editMessage(message.id, newContent);
+                  
+                  // FORÇAR ATUALIZAÇÃO
+                  _loadInitialMessages();
+                  
                   Navigator.pop(context);
                   _showSuccessSnackbar('Mensagem editada');
                 } catch (e) {
@@ -312,12 +333,17 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // =================================================================
+  // FUNÇÃO DE EXCLUSÃO CORRIGIDA
+  // =================================================================
+  // Esta função agora verifica se a exclusão foi bem-sucedida
+  // antes de mostrar a mensagem de sucesso.
   void _deleteMessage(Message message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Excluir mensagem'),
-        content: Text('Tem certeza que deseja excluir esta mensagem?'),
+        content: Text('Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -325,13 +351,38 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              Navigator.pop(context); // Fechar dialog primeiro
+              
+              // 1. REMOVER LOCALMENTE IMEDIATAMENTE (para melhor UX)
+              _removeMessageLocally(message.id);
+              
               try {
                 final chatService = Provider.of<ChatService>(context, listen: false);
+                
+                // 2. EXCLUIR NO BANCO DE DADOS
                 await chatService.deleteMessage(message.id);
-                Navigator.pop(context);
-                _showSuccessSnackbar('Mensagem excluída');
+                
+                // 3. VERIFICAR SE FOI REALMENTE EXCLUÍDA
+                // (O serviço isMessageDeleted deve checar se a msg ainda existe)
+                await Future.delayed(Duration(milliseconds: 1000));
+                final isTrulyDeleted = await chatService.isMessageDeleted(message.id);
+                
+                if (isTrulyDeleted) {
+                  // SÓ MOSTRAR SUCESSO SE REALMENTE FOI
+                  _showSuccessSnackbar('Mensagem excluída com sucesso');
+                } else {
+                  // SE FALHOU (EX: RLS errada), RECARREGAR
+                  print('⚠️ Falha ao excluir a mensagem, recarregando...');
+                  _showErrorSnackbar('Falha ao excluir. A mensagem será recarregada.');
+                  await _forceRefreshMessages(); // Reverte a exclusão local
+                }
+                
               } catch (e) {
+                print('❌ Erro ao excluir mensagem: $e');
                 _showErrorSnackbar('Erro ao excluir mensagem: $e');
+                
+                // 4. SE DER ERRO, RECARREGAR PARA REVERTER
+                _loadInitialMessages();
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -341,6 +392,9 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+  // =================================================================
+  // FIM DA FUNÇÃO CORRIGIDA
+  // =================================================================
 
   void _showReactionPicker(Message message) {
     final emojis = ['👍', '❤️', '😄', '😮', '😢', '🙏'];
@@ -359,8 +413,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 final userId = auth.currentUser?.id ?? '';
                 
                 await chatService.addReaction(message.id, userId, emoji);
+                
+                // FORÇAR ATUALIZAÇÃO IMEDIATA
+                _loadInitialMessages();
+                
                 Navigator.pop(context);
-                _showSuccessSnackbar('Reação adicionada');
+                _showSuccessSnackbar('Reação adicionada!');
               } catch (e) {
                 _showErrorSnackbar('Erro ao adicionar reação: $e');
               }
@@ -411,8 +469,7 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: () {
-              _loadInitialMessages();
-              _showSuccessSnackbar('Atualizando mensagens...');
+              _forceRefreshMessages();
             },
           ),
         ],

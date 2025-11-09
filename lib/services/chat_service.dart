@@ -20,7 +20,10 @@ class ChatService extends ChangeNotifier {
       
       final res = await _client
           .from('messages')
-          .select()
+          .select('''
+            *,
+            message_reactions(*)
+          ''')
           .eq('conversation_id', conversationId)
           .order('created_at', ascending: true);
       
@@ -29,7 +32,7 @@ class ChatService extends ChangeNotifier {
       final data = res as List<dynamic>;
       print('📨 ${data.length} mensagens encontradas');
       
-      return data.map((e) {
+      final messages = data.map((e) {
         final map = e as Map<String, dynamic>;
         
         String content = '';
@@ -56,17 +59,34 @@ class ChatService extends ChangeNotifier {
           createdAt = DateTime.now();
         }
         
+        // PROCESSAR REAÇÕES - CORRIGIDO
+        List<MessageReaction> reactions = [];
+        final reactionsData = map['message_reactions'] as List<dynamic>?;
+        if (reactionsData != null) {
+          for (final reactionMap in reactionsData) {
+            try {
+              final reaction = MessageReaction.fromMap(reactionMap as Map<String, dynamic>);
+              reactions.add(reaction);
+            } catch (e) {
+              print('⚠️ Erro ao processar reação: $e');
+            }
+          }
+        }
+        
         return Message(
-          id: map['id'] as String? ?? _uuid.v4(),
-          conversationId: map['conversation_id'] as String? ?? conversationId,
-          senderId: map['sender_id'] as String? ?? '',
+          id: map['id'] as String,
+          conversationId: map['conversation_id'] as String,
+          senderId: map['sender_id'] as String,
           content: content,
           type: type,
           createdAt: createdAt,
+          reactions: reactions,
           isEdited: map['is_edited'] as bool? ?? false,
           isDeleted: map['is_deleted'] as bool? ?? false,
         );
       }).toList();
+      
+      return messages;
       
     } catch (e) {
       print('❌ Erro ao buscar mensagens: $e');
@@ -81,45 +101,72 @@ class ChatService extends ChangeNotifier {
           .stream(primaryKey: ['id'])
           .eq('conversation_id', conversationId)
           .order('created_at')
-          .map((events) {
-            return events.map((event) {
-              final map = event as Map<String, dynamic>;
-              
-              String content = '';
-              String type = 'text';
-              
-              if (map.containsKey('content') && map['content'] != null) {
-                content = map['content'] as String;
-              } else if (map.containsKey('payload')) {
-                final payload = map['payload'] as Map<String, dynamic>?;
-                content = payload?['content']?.toString() ?? '';
-                type = payload?['type']?.toString() ?? 'text';
-              }
-              
-              DateTime createdAt;
-              try {
-                if (map['created_at'] is String) {
-                  createdAt = DateTime.parse(map['created_at'] as String);
-                } else if (map['inserted_at'] is String) {
-                  createdAt = DateTime.parse(map['inserted_at'] as String);
-                } else {
+          .asyncMap((events) async {
+            final messagesWithReactions = await Future.wait(
+              events.map((event) async {
+                final map = event as Map<String, dynamic>;
+                
+                String content = '';
+                String type = 'text';
+                
+                if (map.containsKey('content') && map['content'] != null) {
+                  content = map['content'] as String;
+                } else if (map.containsKey('payload')) {
+                  final payload = map['payload'] as Map<String, dynamic>?;
+                  content = payload?['content']?.toString() ?? '';
+                  type = payload?['type']?.toString() ?? 'text';
+                }
+                
+                DateTime createdAt;
+                try {
+                  if (map['created_at'] is String) {
+                    createdAt = DateTime.parse(map['created_at'] as String);
+                  } else if (map['inserted_at'] is String) {
+                    createdAt = DateTime.parse(map['inserted_at'] as String);
+                  } else {
+                    createdAt = DateTime.now();
+                  }
+                } catch (e) {
                   createdAt = DateTime.now();
                 }
-              } catch (e) {
-                createdAt = DateTime.now();
-              }
-              
-              return Message(
-                id: map['id'] as String? ?? _uuid.v4(),
-                conversationId: map['conversation_id'] as String? ?? conversationId,
-                senderId: map['sender_id'] as String? ?? '',
-                content: content,
-                type: type,
-                createdAt: createdAt,
-                isEdited: map['is_edited'] as bool? ?? false,
-                isDeleted: map['is_deleted'] as bool? ?? false,
-              );
-            }).toList();
+                
+                // BUSCAR REAÇÕES SEPARADAMENTE - CORRIGIDO
+                List<MessageReaction> reactions = [];
+                try {
+                  final reactionsResponse = await _client
+                      .from('message_reactions')
+                      .select()
+                      .eq('message_id', map['id']);
+                  
+                  if (reactionsResponse != null && reactionsResponse is List) {
+                    for (final reactionData in reactionsResponse) {
+                      try {
+                        final reaction = MessageReaction.fromMap(reactionData as Map<String, dynamic>);
+                        reactions.add(reaction);
+                      } catch (e) {
+                        print('⚠️ Erro ao processar reação do stream: $e');
+                      }
+                    }
+                  }
+                } catch (e) {
+                  print('⚠️ Erro ao buscar reações para mensagem ${map['id']}: $e');
+                }
+                
+                return Message(
+                  id: map['id'] as String,
+                  conversationId: map['conversation_id'] as String,
+                  senderId: map['sender_id'] as String,
+                  content: content,
+                  type: type,
+                  createdAt: createdAt,
+                  reactions: reactions,
+                  isEdited: map['is_edited'] as bool? ?? false,
+                  isDeleted: map['is_deleted'] as bool? ?? false,
+                );
+              })
+            );
+            
+            return messagesWithReactions;
           });
     } catch (e) {
       print('❌ Erro na subscription: $e');
@@ -178,15 +225,17 @@ class ChatService extends ChangeNotifier {
     try {
       print('😊 Adicionando reação: $emoji à mensagem: $messageId');
       
-      await _client.from('message_reactions').insert({
-        'id': _uuid.v4(),
-        'message_id': messageId,
-        'user_id': userId,
-        'emoji': emoji,
-        'created_at': DateTime.now().toIso8601String(),
+      final response = await _client.rpc('add_message_reaction', params: {
+        'p_message_id': messageId,
+        'p_user_id': userId,
+        'p_emoji': emoji,
       });
       
-      print('✅ Reação adicionada com sucesso');
+      print('✅ Reação adicionada via função: $response');
+      
+      // FORÇAR ATUALIZAÇÃO
+      notifyListeners();
+      
     } catch (e) {
       print('❌ Erro ao adicionar reação: $e');
       rethrow;
@@ -213,12 +262,19 @@ class ChatService extends ChangeNotifier {
       print('✏️ Editando mensagem: $messageId');
       print('📝 Novo conteúdo: $newContent');
       
+      final updateData = {
+        'content': newContent,
+        'is_edited': true,
+      };
+      
+      try {
+        updateData['updated_at'] = DateTime.now().toIso8601String();
+      } catch (e) {
+        print('⚠️ Coluna updated_at não disponível');
+      }
+      
       await _client.from('messages')
-          .update({
-            'content': newContent,
-            'is_edited': true,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
+          .update(updateData)
           .eq('id', messageId);
       
       print('✅ Mensagem editada com sucesso');
@@ -232,18 +288,34 @@ class ChatService extends ChangeNotifier {
     try {
       print('🗑️ Excluindo mensagem: $messageId');
       
-      await _client.from('messages')
-          .update({
-            'is_deleted': true,
-            'content': 'Mensagem excluída',
-            'updated_at': DateTime.now().toIso8601String(),
-          })
+      // EXCLUSÃO REAL - método mais direto
+      final response = await _client.from('messages')
+          .delete()
           .eq('id', messageId);
       
       print('✅ Mensagem excluída com sucesso');
+      
+      // FORÇAR ATUALIZAÇÃO IMEDIATA
+      notifyListeners();
+      
     } catch (e) {
       print('❌ Erro ao excluir mensagem: $e');
       rethrow;
+    }
+  }
+
+  // MÉTODO NOVO: Verificar se mensagem foi excluída
+  Future<bool> isMessageDeleted(String messageId) async {
+    try {
+      final response = await _client
+          .from('messages')
+          .select()
+          .eq('id', messageId)
+          .maybeSingle();
+      
+      return response == null; // Se não encontrou, foi excluída
+    } catch (e) {
+      return true;
     }
   }
 
@@ -286,6 +358,11 @@ class ChatService extends ChangeNotifier {
       print('❌ Erro ao criar conversa: $e');
       rethrow;
     }
+  }
+
+  void refreshMessages() {
+    print('🔄 Forçando atualização das mensagens...');
+    notifyListeners();
   }
 
   @override

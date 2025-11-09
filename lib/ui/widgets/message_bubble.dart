@@ -141,25 +141,52 @@ class MessageBubble extends StatelessWidget {
   Widget _buildReactions() {
     if (message.reactions.isEmpty) return SizedBox();
 
+    // Agrupar reações por emoji
+    final reactionCounts = <String, int>{};
+    for (final reaction in message.reactions) {
+      reactionCounts[reaction.emoji] = (reactionCounts[reaction.emoji] ?? 0) + 1;
+    }
+
     return Padding(
       padding: EdgeInsets.only(top: 4),
       child: Wrap(
-        spacing: 4,
-        children: message.reactions.map((reaction) => GestureDetector(
-          onTap: () => onReactionTap?.call(reaction),
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        spacing: 6,
+        runSpacing: 2,
+        children: reactionCounts.entries.map((entry) {
+          final emoji = entry.key;
+          final count = entry.value;
+          
+          return Container(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[300]!),
+              color: isMine ? Colors.blue[50] : Colors.grey[100],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isMine ? Colors.blue[100]! : Colors.grey[300]!,
+              ),
             ),
-            child: Text(
-              reaction.emoji,
-              style: TextStyle(fontSize: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  emoji,
+                  style: TextStyle(fontSize: 14),
+                ),
+                if (count > 1) ...[
+                  SizedBox(width: 4),
+                  Text(
+                    count.toString(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ),
-        )).toList(),
+          );
+        }).toList(),
       ),
     );
   }
@@ -196,7 +223,11 @@ class MessageBubble extends StatelessWidget {
                   ),
                   child: _buildMessageContent(),
                 ),
+                
+                // REAÇÕES - AGORA DEVE APARECER
                 _buildReactions(),
+                
+                // TIMESTAMP
                 Padding(
                   padding: EdgeInsets.only(top: 4),
                   child: Text(

@@ -46,9 +46,9 @@ class MyApp extends StatelessWidget {
           '/login': (_) => LoginScreen(),
           '/register': (_) => RegisterScreen(),
           '/home': (_) => HomeScreen(),
-          '/chat': (_) => ChatScreen(),
+          '/chat': (_) => ChatScreen(), // AGORA CORRETO - só uma importação
           '/edit-profile': (_) => EditProfileScreen(),
-          '/search': (_) => SearchScreen(),
+          '/search': (_) => SearchScreen(), // AGORA CORRETO
         },
       ),
     );

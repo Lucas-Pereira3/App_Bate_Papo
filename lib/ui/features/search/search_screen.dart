@@ -13,70 +13,76 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
+  final SearchService _searchService = SearchService();
   List<Map<String, dynamic>> _searchResults = [];
-  bool _isSearching = false;
   bool _isLoading = false;
-  String _currentQuery = '';
+  bool _isSearchingUsers = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _searchFocusNode.requestFocus();
-  }
-
-  Future<void> _performSearch(String query) async {
+  void _performSearch(String query) async {
     if (query.isEmpty) {
       setState(() {
         _searchResults = [];
-        _isSearching = false;
       });
       return;
     }
 
     setState(() {
       _isLoading = true;
-      _isSearching = true;
-      _currentQuery = query;
     });
 
     try {
-      final searchService = Provider.of<SearchService>(context, listen: false);
+      List<Map<String, dynamic>> results;
       
-      final users = await searchService.searchUsers(query);
-      final groups = await searchService.searchGroups(query);
-      
+      if (_isSearchingUsers) {
+        results = await _searchService.searchUsers(query);
+      } else {
+        results = await _searchService.searchGroups(query);
+      }
+
       setState(() {
-        _searchResults = [
-          ...users.map((user) => {...user, 'type': 'user'}),
-          ...groups.map((group) => {...group, 'type': 'group'})
-        ];
+        _searchResults = results;
         _isLoading = false;
       });
     } catch (e) {
       print('Erro na busca: $e');
       setState(() {
         _isLoading = false;
+        _searchResults = [];
       });
+      
       _showSnackbar('Erro ao realizar busca');
     }
   }
 
-  Future<void> _startConversationWithUser(Map<String, dynamic> user) async {
+  void _showSnackbar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _startConversation(Map<String, dynamic> user) async {
     try {
       final chatService = Provider.of<ChatService>(context, listen: false);
       final auth = Provider.of<AuthService>(context, listen: false);
-      final currentUserId = auth.currentUser!.id;
+      final currentUserId = auth.currentUser?.id;
 
+      if (currentUserId == null) {
+        _showSnackbar('Usuário não autenticado');
+        return;
+      }
+
+      // Criar conversa individual
       final conversationId = await chatService.createConversation(
-        'Conversa com ${user['full_name']}',
-        false,
-        false,
+        user['full_name'] ?? 'Chat',
+        false, // não é grupo
+        false, // não é público
         [currentUserId, user['id']],
       );
 
-      Navigator.pop(context);
-      Navigator.pushNamed(
+      Navigator.pushReplacementNamed(
         context, 
         '/chat',
         arguments: {'conversationId': conversationId}
@@ -93,115 +99,66 @@ class _SearchScreenState extends State<SearchScreen> {
     try {
       final chatService = Provider.of<ChatService>(context, listen: false);
       final auth = Provider.of<AuthService>(context, listen: false);
-      final currentUserId = auth.currentUser!.id;
+      final currentUserId = auth.currentUser?.id;
 
+      if (currentUserId == null) {
+        _showSnackbar('Usuário não autenticado');
+        return;
+      }
+
+      // Adicionar usuário ao grupo
       await chatService.createConversation(
         group['name'],
-        true,
-        group['is_public'],
+        true, // é grupo
+        group['is_public'] ?? true,
         [currentUserId],
       );
 
-      Navigator.pop(context);
-      Navigator.pushNamed(
+      Navigator.pushReplacementNamed(
         context, 
         '/chat',
         arguments: {'conversationId': group['id']}
       );
 
-      _showSnackbar('Você entrou no grupo!', isError: false);
+      _showSnackbar('Entrou no grupo!', isError: false);
     } catch (e) {
       print('Erro ao entrar no grupo: $e');
       _showSnackbar('Erro ao entrar no grupo: $e');
     }
   }
 
-  void _showSnackbar(String message, {bool isError = true}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
-    );
-  }
-
   Widget _buildUserResult(Map<String, dynamic> user) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.blue,
-        child: Text(
-          (user['full_name']?[0] ?? 'U').toUpperCase(),
-          style: TextStyle(color: Colors.white),
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.blue,
+          child: Text(
+            (user['full_name']?[0] ?? 'U').toUpperCase(),
+            style: TextStyle(color: Colors.white),
+          ),
         ),
+        title: Text(user['full_name'] ?? 'Usuário'),
+        subtitle: Text(user['email'] ?? ''),
+        trailing: Icon(Icons.chat),
+        onTap: () => _startConversation(user),
       ),
-      title: Text(user['full_name'] ?? 'Usuário'),
-      subtitle: Text('Usuário'),
-      trailing: Icon(Icons.chat, color: Colors.blue),
-      onTap: () => _startConversationWithUser(user),
     );
   }
 
   Widget _buildGroupResult(Map<String, dynamic> group) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Colors.green,
-        child: Icon(Icons.group, color: Colors.white),
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.green,
+          child: Icon(Icons.group, color: Colors.white),
+        ),
+        title: Text(group['name'] ?? 'Grupo'),
+        subtitle: Text(group['is_public'] == true ? 'Público' : 'Privado'),
+        trailing: Icon(Icons.group_add),
+        onTap: () => _joinGroup(group),
       ),
-      title: Text(group['name'] ?? 'Grupo'),
-      subtitle: Text('Grupo ${group['is_public'] == true ? 'Público' : 'Privado'}'),
-      trailing: Icon(Icons.group_add, color: Colors.green),
-      onTap: () => _joinGroup(group),
-    );
-  }
-
-  Widget _buildSearchResults() {
-    if (_isLoading) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Buscando...'),
-          ],
-        ),
-      );
-    }
-
-    if (_searchResults.isEmpty && _isSearching) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'Nenhum resultado encontrado',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Tente buscar por outros termos',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: _searchResults.length,
-      itemBuilder: (context, index) {
-        final item = _searchResults[index];
-        final type = item['type'] as String;
-        
-        return Card(
-          margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: type == 'user' 
-              ? _buildUserResult(item)
-              : _buildGroupResult(item),
-        );
-      },
     );
   }
 
@@ -209,69 +166,100 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: TextField(
-          controller: _searchController,
-          focusNode: _searchFocusNode,
-          decoration: InputDecoration(
-            hintText: 'Buscar usuários ou grupos...',
-            border: InputBorder.none,
-            hintStyle: TextStyle(color: Colors.white70),
-          ),
-          style: TextStyle(color: Colors.white),
-          onChanged: (value) {
-            if (value.length >= 2) {
-              _performSearch(value);
-            } else {
-              setState(() {
-                _searchResults = [];
-                _isSearching = false;
-              });
-            }
-          },
-        ),
-        backgroundColor: Colors.blue,
-        actions: [
-          if (_searchController.text.isNotEmpty)
-            IconButton(
-              icon: Icon(Icons.clear),
-              onPressed: () {
-                _searchController.clear();
-                setState(() {
-                  _searchResults = [];
-                  _isSearching = false;
-                });
-              },
+        title: Text('Buscar'),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Digite para buscar...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                    suffixIcon: _isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                  ),
+                  onChanged: _performSearch,
+                ),
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: Text('Usuários'),
+                        selected: _isSearchingUsers,
+                        onSelected: (selected) {
+                          setState(() {
+                            _isSearchingUsers = true;
+                          });
+                          if (_searchController.text.isNotEmpty) {
+                            _performSearch(_searchController.text);
+                          }
+                        },
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: Text('Grupos'),
+                        selected: !_isSearchingUsers,
+                        onSelected: (selected) {
+                          setState(() {
+                            _isSearchingUsers = false;
+                          });
+                          if (_searchController.text.isNotEmpty) {
+                            _performSearch(_searchController.text);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
+          ),
+          Expanded(
+            child: _searchResults.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          _searchController.text.isEmpty
+                              ? 'Digite para buscar'
+                              : 'Nenhum resultado encontrado',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _searchResults.length,
+                    itemBuilder: (ctx, i) {
+                      final item = _searchResults[i];
+                      return _isSearchingUsers
+                          ? _buildUserResult(item)
+                          : _buildGroupResult(item);
+                    },
+                  ),
+          ),
         ],
       ),
-      body: _isSearching || _searchResults.isNotEmpty
-          ? _buildSearchResults()
-          : Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'Buscar usuários e grupos',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Digite pelo menos 2 caracteres para buscar',
-                    style: TextStyle(color: Colors.grey),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
     );
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
   }
 }
