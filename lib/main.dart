@@ -5,8 +5,14 @@ import 'ui/features/auth/login_screen.dart';
 import 'ui/features/auth/register_screen.dart';
 import 'ui/features/home/home_screen.dart';
 import 'ui/features/chat/chat_screen.dart';
+import 'ui/features/profile/edit_profile_screen.dart';
+import 'ui/features/search/search_screen.dart';
 import 'services/auth_service.dart';
 import 'services/chat_service.dart';
+import 'services/profile_service.dart';
+import 'services/presence_service.dart';
+import 'services/search_service.dart';
+import 'services/storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,9 +29,13 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => ChatService()),
+        ChangeNotifierProvider(create: (_) => ProfileService()),
+        ChangeNotifierProvider(create: (_) => PresenceService()),
+        Provider(create: (_) => SearchService()),
+        Provider(create: (_) => StorageService()),
       ],
       child: MaterialApp(
-        title: 'Zapiz',
+        title: 'Ratozap Chat',
         theme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,
@@ -37,6 +47,8 @@ class MyApp extends StatelessWidget {
           '/register': (_) => RegisterScreen(),
           '/home': (_) => HomeScreen(),
           '/chat': (_) => ChatScreen(),
+          '/edit-profile': (_) => EditProfileScreen(),
+          '/search': (_) => SearchScreen(),
         },
       ),
     );

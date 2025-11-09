@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 import '../../../core/supabase_config.dart';
 import '../../../core/app_routes.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/presence_service.dart';
+import '../../../services/chat_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadConversations();
+    _setUserOnline();
+  }
+
+  void _setUserOnline() {
+    final presenceService = Provider.of<PresenceService>(context, listen: false);
+    presenceService.setUserOnline();
   }
 
   Future<void> _loadConversations() async {
@@ -35,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final currentUserId = _client.auth.currentUser?.id;
       if (currentUserId == null) return [];
 
-      // Busca conversas onde o usuário atual é participante
       final response = await _client
           .from('participants')
           .select('''
@@ -44,13 +51,14 @@ class _HomeScreenState extends State<HomeScreen> {
               name,
               created_at,
               created_by,
+              is_group,
+              is_public,
               participants!inner(user_id),
-              messages(id, content, created_at, type)
+              messages(id, content, created_at, type, is_deleted)
             )
           ''')
           .eq('user_id', currentUserId);
 
-      // Extrai as conversas da resposta
       final conversations = (response as List<dynamic>)
           .map((item) => item['conversation'] as Map<String, dynamic>)
           .toList();
@@ -62,9 +70,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // MÉTODO CORRIGIDO PARA CRIAR CONVERSA
   void _createNewConversation(BuildContext context) {
     final TextEditingController _nameController = TextEditingController();
+    bool _isGroup = false;
+    bool _isPublic = true;
 
     showDialog(
       context: context,
@@ -83,9 +92,41 @@ class _HomeScreenState extends State<HomeScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _isGroup,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          _isGroup = value!;
+                        });
+                      },
+                    ),
+                    Text('Conversa em grupo'),
+                  ],
+                ),
+                if (_isGroup) ...[
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _isPublic,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            _isPublic = value!;
+                          });
+                        },
+                      ),
+                      Text('Grupo público'),
+                    ],
+                  ),
+                ],
                 SizedBox(height: 8),
                 Text(
-                  'Você será o primeiro participante da conversa',
+                  _isGroup 
+                    ? 'Grupo ${_isPublic ? 'público' : 'privado'} criado'
+                    : 'Conversa individual criada',
                   style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
@@ -104,13 +145,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     return;
                   }
 
-                  // Mostrar loading
                   setDialogState(() {});
 
                   try {
-                    await _createConversation(name);
-                    Navigator.pop(context); // Fecha o dialog
-                    _loadConversations(); // Recarrega a lista
+                    final chatService = Provider.of<ChatService>(context, listen: false);
+                    final currentUserId = _client.auth.currentUser!.id;
+                    
+                    await chatService.createConversation(
+                      name, 
+                      _isGroup, 
+                      _isPublic, 
+                      [currentUserId]
+                    );
+                    
+                    Navigator.pop(context);
+                    _loadConversations();
                     _showSnackbar(context, 'Conversa criada com sucesso!', isError: false);
                   } catch (e) {
                     _showSnackbar(context, 'Erro: $e');
@@ -123,47 +172,6 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
-  }
-
-  // MÉTODO SIMPLIFICADO E CORRIGIDO
-  Future<void> _createConversation(String name) async {
-    try {
-      final currentUserId = _client.auth.currentUser!.id;
-
-      // 1. Cria a conversa
-      final conversationId = _uuid.v4();
-      
-      await _client.from('conversations').insert({
-        'id': conversationId,
-        'name': name,
-        'created_at': DateTime.now().toIso8601String(),
-        'created_by': currentUserId,
-      });
-      
-      // 2. Adiciona o usuário atual como participante
-      await _client.from('participants').insert({
-        'id': _uuid.v4(),
-        'conversation_id': conversationId,
-        'user_id': currentUserId,
-        'joined_at': DateTime.now().toIso8601String(),
-      });
-
-      // 3. Cria uma mensagem de boas-vindas
-      await _client.from('messages').insert({
-        'id': _uuid.v4(),
-        'conversation_id': conversationId,
-        'sender_id': currentUserId,
-        'content': 'Conversa "$name" iniciada!',
-        'type': 'text',
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      print('✅ Conversa criada: $conversationId');
-      
-    } catch (e) {
-      print('❌ Erro ao criar conversa: $e');
-      throw Exception('Erro ao criar conversa: $e');
-    }
   }
 
   void _showSnackbar(BuildContext context, String message, {bool isError = true}) {
@@ -196,6 +204,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _getLastMessageText(List<dynamic> messages) {
+    if (messages.isEmpty) return 'Nenhuma mensagem';
+    
+    final lastMessage = messages.last;
+    final isDeleted = lastMessage['is_deleted'] == true;
+    
+    if (isDeleted) return 'Mensagem excluída';
+    
+    final type = lastMessage['type'] as String?;
+    if (type == 'image') return '📷 Imagem';
+    
+    return lastMessage['content'] ?? 'Mensagem';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthService>(context).currentUser;
@@ -205,8 +227,18 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text('Zapiz - Conversas'),
         actions: [
           IconButton(
+            icon: Icon(Icons.search),
+            onPressed: () => Navigator.pushNamed(context, '/search'),
+          ),
+          IconButton(
+            icon: Icon(Icons.person),
+            onPressed: () => Navigator.pushNamed(context, '/edit-profile'),
+          ),
+          IconButton(
             icon: Icon(Icons.logout),
             onPressed: () {
+              final presenceService = Provider.of<PresenceService>(context, listen: false);
+              presenceService.setUserOffline();
               Provider.of<AuthService>(context, listen: false).signOut();
               Navigator.pushReplacementNamed(context, '/login');
             },
@@ -281,27 +313,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 final conv = conversations[i];
                 final name = conv['name'] ?? 'Chat';
                 final id = conv['id'];
+                final isGroup = conv['is_group'] == true;
                 
-                // Extrair informações da última mensagem
                 final messages = conv['messages'] as List<dynamic>? ?? [];
-                final lastMessage = messages.isNotEmpty ? messages.last : null;
-                final lastMessageText = lastMessage != null 
-                  ? (lastMessage['content'] ?? 'Imagem')
-                  : 'Nenhuma mensagem';
+                final lastMessageText = _getLastMessageText(messages);
                 
                 return Card(
                   margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: isGroup ? Colors.green : Colors.blue,
                       child: Text(
                         name[0].toUpperCase(),
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
-                    title: Text(
-                      name,
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    title: Row(
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        if (isGroup) ...[
+                          SizedBox(width: 4),
+                          Icon(Icons.group, size: 16, color: Colors.grey),
+                        ]
+                      ],
                     ),
                     subtitle: Text(
                       lastMessageText,
@@ -310,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     trailing: messages.isNotEmpty 
                       ? Text(
-                          _formatTime(lastMessage?['created_at']),
+                          _formatTime(messages.last['created_at']),
                           style: TextStyle(color: Colors.grey, fontSize: 12),
                         )
                       : null,

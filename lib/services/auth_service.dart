@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
+import 'profile_service.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _client = SupabaseConfig.client;
@@ -9,19 +10,51 @@ class AuthService extends ChangeNotifier {
   User? get currentUser => _client.auth.currentUser;
 
   Future<AuthResponse> signIn(String email, String password) async {
-    final res = await _client.auth.signInWithPassword(email: email, password: password);
-    notifyListeners();
-    return res;
+    try {
+      final res = await _client.auth.signInWithPassword(
+        email: email, 
+        password: password
+      );
+      
+      if (res.session != null) {
+        final profileService = ProfileService();
+        await profileService.initializeProfile();
+      }
+      
+      notifyListeners();
+      return res;
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<AuthResponse> signUp(String email, String password) async {
-    final res = await _client.auth.signUp(email: email, password: password);
-    notifyListeners();
-    return res;
+    try {
+      final res = await _client.auth.signUp(
+        email: email, 
+        password: password
+      );
+      
+      if (res.user != null) {
+        print('✅ Usuário registrado - perfil será criado no primeiro login');
+      }
+      
+      notifyListeners();
+      return res;
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
-    await _client.auth.signOut();
-    notifyListeners();
+    try {
+      final profileService = ProfileService();
+      await profileService.setUserOnline(false);
+      
+      await _client.auth.signOut();
+      notifyListeners();
+    } catch (e) {
+      rethrow;
+    }
   }
 }

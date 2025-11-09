@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/presence_service.dart';
 import '../../../ui/widgets/message_bubble.dart';
 import '../../../models/message_model.dart';
 
@@ -16,10 +19,14 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _imagePicker = ImagePicker();
   StreamSubscription<List<Message>>? _messagesSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _typingSubscription;
   List<Message> _messages = [];
   String _conversationId = '';
   bool _isLoading = true;
+  bool _isTyping = false;
+  final Map<String, String> _typingUsers = {};
 
   @override
   void didChangeDependencies() {
@@ -34,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_conversationId.isNotEmpty) {
       await _loadInitialMessages();
       _subscribeToMessages();
+      _subscribeToTyping();
     }
   }
 
@@ -60,7 +68,6 @@ class _ChatScreenState extends State<ChatScreen> {
   void _subscribeToMessages() {
     final chatService = Provider.of<ChatService>(context, listen: false);
     
-    // Cancela subscription anterior se existir
     _messagesSubscription?.cancel();
     
     _messagesSubscription = chatService.subscribeMessages(_conversationId).listen(
@@ -77,17 +84,46 @@ class _ChatScreenState extends State<ChatScreen> {
         print('❌ Erro na subscription: $error');
         _showErrorSnackbar('Erro na conexão em tempo real');
         
-        // Tenta reconectar após 3 segundos
         Future.delayed(Duration(seconds: 3), () {
           if (_conversationId.isNotEmpty) {
             _subscribeToMessages();
           }
         });
       },
-      onDone: () {
-        print('ℹ️ Stream de mensagens finalizado');
+    );
+  }
+
+  void _subscribeToTyping() {
+    final presenceService = Provider.of<PresenceService>(context, listen: false);
+    
+    _typingSubscription?.cancel();
+    
+    _typingSubscription = presenceService.subscribeToTyping(_conversationId).listen(
+      (typingEvents) {
+        setState(() {
+          _typingUsers.clear();
+          for (final event in typingEvents) {
+            _typingUsers[event['user_id']] = event['user_name'] ?? 'Usuário';
+          }
+        });
       },
     );
+  }
+
+  void _startTyping() {
+    if (!_isTyping) {
+      _isTyping = true;
+      final presenceService = Provider.of<PresenceService>(context, listen: false);
+      presenceService.startTyping(_conversationId);
+    }
+  }
+
+  void _stopTyping() {
+    if (_isTyping) {
+      _isTyping = false;
+      final presenceService = Provider.of<PresenceService>(context, listen: false);
+      presenceService.stopTyping(_conversationId);
+    }
   }
 
   void _scrollToBottom() {
@@ -141,10 +177,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     try {
-      // Limpa o campo de texto imediatamente
       _textController.clear();
+      _stopTyping();
       
-      // Mostra mensagem de enviando
       _showSuccessSnackbar('Enviando mensagem...');
       
       await chatService.sendTextMessage(_conversationId, userId, text);
@@ -154,15 +189,200 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       print('❌ Erro ao enviar mensagem: $e');
       _showErrorSnackbar('Erro ao enviar mensagem: $e');
-      
-      // Devolve o texto para o campo se deu erro
       _textController.text = text;
     }
+  }
+
+  Future<void> _pickAndSendImage() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        
+        final chatService = Provider.of<ChatService>(context, listen: false);
+        final auth = Provider.of<AuthService>(context, listen: false);
+        final userId = auth.currentUser?.id ?? '';
+        
+        if (userId.isEmpty || _conversationId.isEmpty) {
+          _showErrorSnackbar('Erro: usuário ou conversa não encontrada');
+          return;
+        }
+        
+        _showSuccessSnackbar('Enviando imagem...');
+        
+        await chatService.sendImageMessage(_conversationId, userId, bytes, image.name);
+        
+        _showSuccessSnackbar('Imagem enviada!');
+      }
+    } catch (e) {
+      print('❌ Erro ao enviar imagem: $e');
+      _showErrorSnackbar('Erro ao enviar imagem: $e');
+    }
+  }
+
+  void _showMessageOptions(Message message) {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final isMyMessage = message.senderId == auth.currentUser?.id;
+    final canEdit = isMyMessage && 
+        DateTime.now().difference(message.createdAt).inMinutes <= 15;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (canEdit && message.type == 'text' && !message.isDeleted)
+            ListTile(
+              leading: Icon(Icons.edit),
+              title: Text('Editar mensagem'),
+              onTap: () {
+                Navigator.pop(context);
+                _editMessage(message);
+              },
+            ),
+          if (isMyMessage && !message.isDeleted)
+            ListTile(
+              leading: Icon(Icons.delete),
+              title: Text('Excluir mensagem'),
+              onTap: () {
+                Navigator.pop(context);
+                _deleteMessage(message);
+              },
+            ),
+          ListTile(
+            leading: Icon(Icons.emoji_emotions),
+            title: Text('Adicionar reação'),
+            onTap: () {
+              Navigator.pop(context);
+              _showReactionPicker(message);
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.close),
+            title: Text('Cancelar'),
+            onTap: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editMessage(Message message) {
+    final TextEditingController editController = TextEditingController(text: message.content);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Editar mensagem'),
+        content: TextField(
+          controller: editController,
+          maxLines: 3,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Digite a nova mensagem...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newContent = editController.text.trim();
+              if (newContent.isNotEmpty && newContent != message.content) {
+                try {
+                  final chatService = Provider.of<ChatService>(context, listen: false);
+                  await chatService.editMessage(message.id, newContent);
+                  Navigator.pop(context);
+                  _showSuccessSnackbar('Mensagem editada');
+                } catch (e) {
+                  _showErrorSnackbar('Erro ao editar mensagem: $e');
+                }
+              }
+            },
+            child: Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteMessage(Message message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Excluir mensagem'),
+        content: Text('Tem certeza que deseja excluir esta mensagem?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                final chatService = Provider.of<ChatService>(context, listen: false);
+                await chatService.deleteMessage(message.id);
+                Navigator.pop(context);
+                _showSuccessSnackbar('Mensagem excluída');
+              } catch (e) {
+                _showErrorSnackbar('Erro ao excluir mensagem: $e');
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReactionPicker(Message message) {
+    final emojis = ['👍', '❤️', '😄', '😮', '😢', '🙏'];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Adicionar reação'),
+        content: Wrap(
+          spacing: 8,
+          children: emojis.map((emoji) => GestureDetector(
+            onTap: () async {
+              try {
+                final chatService = Provider.of<ChatService>(context, listen: false);
+                final auth = Provider.of<AuthService>(context, listen: false);
+                final userId = auth.currentUser?.id ?? '';
+                
+                await chatService.addReaction(message.id, userId, emoji);
+                Navigator.pop(context);
+                _showSuccessSnackbar('Reação adicionada');
+              } catch (e) {
+                _showErrorSnackbar('Erro ao adicionar reação: $e');
+              }
+            },
+            child: Text(emoji, style: TextStyle(fontSize: 24)),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
     _messagesSubscription?.cancel();
+    _typingSubscription?.cancel();
+    _stopTyping();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -175,7 +395,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Chat'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Chat'),
+            if (_typingUsers.isNotEmpty)
+              Text(
+                '${_typingUsers.values.join(', ')} ${_typingUsers.length == 1 ? 'está' : 'estão'} digitando...',
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
@@ -189,16 +419,8 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // Indicador de carregamento
           if (_isLoading)
             LinearProgressIndicator(minHeight: 2),
-          
-          // Indicador de conexão
-          if (_messagesSubscription != null)
-            Container(
-              height: 2,
-              color: Colors.green,
-            ),
           
           Expanded(
             child: _isLoading
@@ -234,17 +456,20 @@ class _ChatScreenState extends State<ChatScreen> {
                           final message = _messages[i];
                           final isMine = message.senderId == userId;
                           
-                          return MessageBubble(
-                            text: message.content,
-                            mine: isMine,
-                            type: message.type,
-                            timestamp: message.createdAt,
+                          return GestureDetector(
+                            onLongPress: () => _showMessageOptions(message),
+                            child: MessageBubble(
+                              message: message,
+                              isMine: isMine,
+                              onReactionTap: (reaction) {
+                                // Implementar remoção de reação se necessário
+                              },
+                            ),
                           );
                         },
                       ),
           ),
           
-          // Área de input de mensagem
           SafeArea(
             child: Container(
               decoration: BoxDecoration(
@@ -255,15 +480,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    // Botão para adicionar imagem
                     IconButton(
-                      onPressed: () {
-                        _showImageOptionDialog();
-                      }, 
+                      onPressed: _pickAndSendImage,
                       icon: Icon(Icons.photo_library, color: Colors.blue),
                     ),
                     
-                    // Campo de texto
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
@@ -279,12 +500,18 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           maxLines: null,
                           textInputAction: TextInputAction.send,
+                          onChanged: (text) {
+                            if (text.isNotEmpty) {
+                              _startTyping();
+                            } else {
+                              _stopTyping();
+                            }
+                          },
                           onSubmitted: (_) => _sendMessage(),
                         ),
                       ),
                     ),
                     
-                    // Botão enviar
                     IconButton(
                       onPressed: _sendMessage,
                       icon: Icon(Icons.send, color: 
@@ -295,22 +522,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showImageOptionDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Enviar imagem'),
-        content: Text('Funcionalidade de envio de imagem em desenvolvimento...'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
           ),
         ],
       ),

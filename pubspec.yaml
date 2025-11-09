@@ -1,33 +1,27 @@
-name: zapizapi
-description: Aplicativo de chat em tempo real Flutter + Supabase
-publish_to: "none"
-version: 0.0.1
+name: Ratozap_chat
+description: Aplicativo de chat em tempo real com Flutter e Supabase
+
+publish_to: 'none'
+
+version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-
-  # Supabase
-  supabase_flutter: ^2.10.3
-
-  # State management (simples)
-  provider: ^6.0.5
-
-  # Utils
-  
-  cached_network_image: ^3.2.3
-  uuid: ^3.0.7
-  intl: ^0.18.0
+  supabase_flutter: ^2.1.2
+  provider: ^6.1.1
+  image_picker: ^1.0.4
+  uuid: ^4.2.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.0
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/logos/logo_login.png
+    - assets/logos/

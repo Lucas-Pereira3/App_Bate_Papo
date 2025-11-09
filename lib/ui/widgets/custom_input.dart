@@ -5,7 +5,8 @@ class CustomInput extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final bool obscure;
-  final TextInputType keyboardType; // ADICIONE ESTA LINHA
+  final TextInputType keyboardType;
+  final bool enabled;
 
   const CustomInput({
     super.key,
@@ -13,7 +14,8 @@ class CustomInput extends StatelessWidget {
     required this.label,
     required this.controller,
     this.obscure = false,
-    this.keyboardType = TextInputType.text, // VALOR PADRÃO
+    this.keyboardType = TextInputType.text,
+    this.enabled = true,
   });
 
   @override
@@ -26,10 +28,14 @@ class CustomInput extends StatelessWidget {
         TextField(
           controller: controller,
           obscureText: obscure,
+          enabled: enabled,
+          keyboardType: keyboardType,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(),
             isDense: true,
+            filled: !enabled,
+            fillColor: Colors.grey[100],
           ),
         ),
       ],

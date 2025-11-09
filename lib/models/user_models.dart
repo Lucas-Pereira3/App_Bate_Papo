@@ -4,6 +4,7 @@ class AppUser {
   final String? fullName;
   final String? avatarUrl;
   final bool online;
+  final DateTime? lastSeen;
 
   AppUser({
     required this.id,
@@ -11,6 +12,7 @@ class AppUser {
     this.fullName,
     this.avatarUrl,
     this.online = false,
+    this.lastSeen,
   });
 
   factory AppUser.fromMap(Map<String, dynamic> map) {
@@ -20,6 +22,9 @@ class AppUser {
       fullName: map['full_name'] as String?,
       avatarUrl: map['avatar_url'] as String?,
       online: map['online'] as bool? ?? false,
+      lastSeen: map['last_seen'] != null 
+          ? DateTime.parse(map['last_seen'] as String)
+          : null,
     );
   }
 
@@ -30,6 +35,7 @@ class AppUser {
       'full_name': fullName,
       'avatar_url': avatarUrl,
       'online': online,
+      'last_seen': lastSeen?.toIso8601String(),
     };
   }
 }
