@@ -5,7 +5,6 @@ import 'profile_service.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _client = SupabaseConfig.client;
-  User? _currentUser;
 
   User? get currentUser => _client.auth.currentUser;
 
@@ -54,6 +53,16 @@ class AuthService extends ChangeNotifier {
       await _client.auth.signOut();
       notifyListeners();
     } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _client.auth.resetPasswordForEmail(email);
+      print('✅ Link de redefinição enviado para: $email');
+    } catch (e) {
+      print('❌ Erro ao enviar email de redefinição: $e');
       rethrow;
     }
   }

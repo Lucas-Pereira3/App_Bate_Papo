@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 import '../../../core/supabase_config.dart';
 import '../../../core/app_routes.dart';
 import '../../../services/auth_service.dart';
@@ -17,7 +16,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final SupabaseClient _client = SupabaseConfig.client;
-  final Uuid _uuid = Uuid();
   late Future<List<dynamic>> _conversationsFuture;
 
   @override
@@ -71,74 +69,74 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _createNewConversation(BuildContext context) {
-    final TextEditingController _nameController = TextEditingController();
-    bool _isGroup = false;
-    bool _isPublic = true;
+    final TextEditingController nameController = TextEditingController();
+    bool isGroup = false;
+    bool isPublic = true;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text('Nova Conversa'),
+            title: const Text('Nova Conversa'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
+                  controller: nameController,
+                  decoration: const InputDecoration(
                     labelText: 'Nome da conversa',
-                    hintText: 'Ex: Minhas Notas',
+                    hintText: 'Ex: Provas',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Checkbox(
-                      value: _isGroup,
+                      value: isGroup,
                       onChanged: (value) {
                         setDialogState(() {
-                          _isGroup = value!;
+                          isGroup = value!;
                         });
                       },
                     ),
-                    Text('Conversa em grupo'),
+                    const Text('Conversa em grupo'),
                   ],
                 ),
-                if (_isGroup) ...[
-                  SizedBox(height: 8),
+                if (isGroup) ...[
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Checkbox(
-                        value: _isPublic,
+                        value: isPublic,
                         onChanged: (value) {
                           setDialogState(() {
-                            _isPublic = value!;
+                            isPublic = value!;
                           });
                         },
                       ),
-                      Text('Grupo público'),
+                      const Text('Grupo público'),
                     ],
                   ),
                 ],
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
-                  _isGroup 
-                    ? 'Grupo ${_isPublic ? 'público' : 'privado'} criado'
+                  isGroup 
+                    ? 'Grupo ${isPublic ? 'público' : 'privado'} criado'
                     : 'Conversa individual criada',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('Cancelar'),
+                child: const Text('Cancelar'),
               ),
               ElevatedButton(
                 onPressed: () async {
-                  final name = _nameController.text.trim();
+                  final name = nameController.text.trim();
                   
                   if (name.isEmpty) {
                     _showSnackbar(context, 'Digite um nome para a conversa');
@@ -153,11 +151,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     
                     await chatService.createConversation(
                       name, 
-                      _isGroup, 
-                      _isPublic, 
+                      isGroup, 
+                      isPublic, 
                       [currentUserId]
                     );
-                    
+                    if (!context.mounted) return;
+
                     Navigator.pop(context);
                     _loadConversations();
                     _showSnackbar(context, 'Conversa criada com sucesso!', isError: false);
@@ -165,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _showSnackbar(context, 'Erro: $e');
                   }
                 },
-                child: Text('Criar'),
+                child: const Text('Criar'),
               ),
             ],
           );
@@ -220,22 +219,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<AuthService>(context).currentUser;
     
     return Scaffold(
       appBar: AppBar(
-        title: Text('Zapiz - Conversas'),
+        title: const Text('Ratozap- Conversas'),
         actions: [
           IconButton(
-            icon: Icon(Icons.search),
+            icon:const Icon(Icons.search),
             onPressed: () => Navigator.pushNamed(context, '/search'),
           ),
           IconButton(
-            icon: Icon(Icons.person),
+            icon: const Icon(Icons.person),
             onPressed: () => Navigator.pushNamed(context, '/edit-profile'),
           ),
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: const Icon(Icons.logout),
             onPressed: () {
               final presenceService = Provider.of<PresenceService>(context, listen: false);
               presenceService.setUserOffline();
@@ -249,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
         future: _conversationsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
           
           if (snapshot.hasError) {
@@ -257,19 +255,19 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error, size: 64, color: Colors.red),
-                  SizedBox(height: 16),
-                  Text('Erro ao carregar conversas'),
-                  SizedBox(height: 8),
+                  const Icon(Icons.error, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text('Erro ao carregar conversas'),
+                  const SizedBox(height: 8),
                   Text(
                     snapshot.error.toString(),
-                    style: TextStyle(color: Colors.red),
+                    style: const TextStyle(color: Colors.red),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadConversations,
-                    child: Text('Tentar Novamente'),
+                    child: const Text('Tentar Novamente'),
                   ),
                 ],
               ),
@@ -283,22 +281,22 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
+                  const Icon(Icons.chat, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text(
                     'Nenhuma conversa encontrada',
                     style: TextStyle(fontSize: 18, color: Colors.grey),
                   ),
-                  SizedBox(height: 8),
-                  Text(
+                  const SizedBox(height: 8),
+                  const Text(
                     'Toque no botão + para iniciar uma conversa',
                     style: TextStyle(color: Colors.grey),
                   ),
-                  SizedBox(height: 20),
+                  const SizedBox(height: 20),
                   ElevatedButton.icon(
                     onPressed: () => _createNewConversation(context),
-                    icon: Icon(Icons.add),
-                    label: Text('Criar Primeira Conversa'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Criar Primeira Conversa'),
                   ),
                 ],
               ),
@@ -319,24 +317,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 final lastMessageText = _getLastMessageText(messages);
                 
                 return Card(
-                  margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: isGroup ? Colors.green : Colors.blue,
                       child: Text(
                         name[0].toUpperCase(),
-                        style: TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.white),
                       ),
                     ),
                     title: Row(
                       children: [
                         Text(
                           name,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         if (isGroup) ...[
-                          SizedBox(width: 4),
-                          Icon(Icons.group, size: 16, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.group, size: 16, color: Colors.grey),
                         ]
                       ],
                     ),
@@ -348,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     trailing: messages.isNotEmpty 
                       ? Text(
                           _formatTime(messages.last['created_at']),
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
                         )
                       : null,
                     onTap: () {
@@ -367,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.blue,
-        child: Icon(Icons.add, color: Colors.white),
+        child: const Icon(Icons.add, color: Colors.white),
         onPressed: () => _createNewConversation(context),
       ),
     );

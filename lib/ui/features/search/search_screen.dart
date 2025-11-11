@@ -129,18 +129,18 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildUserResult(Map<String, dynamic> user) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.blue,
           child: Text(
             (user['full_name']?[0] ?? 'U').toUpperCase(),
-            style: TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white),
           ),
         ),
         title: Text(user['full_name'] ?? 'Usuário'),
         subtitle: Text(user['email'] ?? ''),
-        trailing: Icon(Icons.chat),
+        trailing:const  Icon(Icons.chat),
         onTap: () => _startConversation(user),
       ),
     );
@@ -148,15 +148,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildGroupResult(Map<String, dynamic> group) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
-        leading: CircleAvatar(
+        leading: const CircleAvatar(
           backgroundColor: Colors.green,
           child: Icon(Icons.group, color: Colors.white),
         ),
         title: Text(group['name'] ?? 'Grupo'),
         subtitle: Text(group['is_public'] == true ? 'Público' : 'Privado'),
-        trailing: Icon(Icons.group_add),
+        trailing: const Icon(Icons.group_add),
         onTap: () => _joinGroup(group),
       ),
     );
@@ -166,22 +166,22 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Buscar'),
+        title: const Text('Buscar'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               children: [
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Digite para buscar...',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
                     suffixIcon: _isLoading
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
@@ -190,12 +190,12 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   onChanged: _performSearch,
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: ChoiceChip(
-                        label: Text('Usuários'),
+                        label: const Text('Usuários'),
                         selected: _isSearchingUsers,
                         onSelected: (selected) {
                           setState(() {
@@ -207,10 +207,10 @@ class _SearchScreenState extends State<SearchScreen> {
                         },
                       ),
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: ChoiceChip(
-                        label: Text('Grupos'),
+                        label: const Text('Grupos'),
                         selected: !_isSearchingUsers,
                         onSelected: (selected) {
                           setState(() {
@@ -233,17 +233,17 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.search,
                           size: 64,
                           color: Colors.grey,
                         ),
-                        SizedBox(height: 16),
+                        const SizedBox(height: 16),
                         Text(
                           _searchController.text.isEmpty
                               ? 'Digite para buscar'
                               : 'Nenhum resultado encontrado',
-                          style: TextStyle(color: Colors.grey),
+                          style: const TextStyle(color: Colors.grey),
                         ),
                       ],
                     ),

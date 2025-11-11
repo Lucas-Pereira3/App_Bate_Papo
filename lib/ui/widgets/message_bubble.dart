@@ -4,12 +4,14 @@ import '../../models/message_model.dart';
 class MessageBubble extends StatelessWidget {
   final Message message;
   final bool isMine;
+  final String currentUserId;
   final Function(MessageReaction)? onReactionTap;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.isMine,
+    required this.currentUserId,
     this.onReactionTap,
   });
 
@@ -33,8 +35,8 @@ class MessageBubble extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.delete, size: 16, color: Colors.grey),
-          SizedBox(width: 4),
+          const Icon(Icons.delete, size: 16, color: Colors.grey),
+          const SizedBox(width: 4),
           Text(
             'Mensagem excluída',
             style: TextStyle(
@@ -47,7 +49,8 @@ class MessageBubble extends StatelessWidget {
     }
 
     if (message.type == 'image') {
-      return Column(
+      // ... (código da imagem) ...
+       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Image.network(
@@ -84,8 +87,8 @@ class MessageBubble extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-                    SizedBox(height: 8),
+                    const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+                    const SizedBox(height: 8),
                     Text(
                       'Imagem não carregada',
                       style: TextStyle(
@@ -99,7 +102,7 @@ class MessageBubble extends StatelessWidget {
           ),
           if (message.isEdited)
             Padding(
-              padding: EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'editado',
                 style: TextStyle(
@@ -124,7 +127,7 @@ class MessageBubble extends StatelessWidget {
         ),
         if (message.isEdited)
           Padding(
-            padding: EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.only(top: 2),
             child: Text(
               'editado',
               style: TextStyle(
@@ -138,8 +141,9 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  // 📍 FUNÇÃO _buildReactions 
   Widget _buildReactions() {
-    if (message.reactions.isEmpty) return SizedBox();
+    if (message.reactions.isEmpty) return const SizedBox();
 
     // Agrupar reações por emoji
     final reactionCounts = <String, int>{};
@@ -148,42 +152,47 @@ class MessageBubble extends StatelessWidget {
     }
 
     return Padding(
-      padding: EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.only(top: 4),
       child: Wrap(
         spacing: 6,
         runSpacing: 2,
         children: reactionCounts.entries.map((entry) {
           final emoji = entry.key;
-          final count = entry.value;
-          
-          return Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: isMine ? Colors.blue[50] : Colors.grey[100],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isMine ? Colors.blue[100]! : Colors.grey[300]!,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  emoji,
-                  style: TextStyle(fontSize: 14),
+
+          MessageReaction? userReaction;
+          for (final reaction in message.reactions) {
+            if (reaction.userId == currentUserId && reaction.emoji == emoji) {
+              userReaction = reaction;
+              break;
+            }
+          }
+
+          return GestureDetector(
+            onTap: () {
+              if (userReaction != null && onReactionTap != null) {
+                onReactionTap!(userReaction);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: userReaction != null ? Colors.blue[100] : (isMine ? Colors.blue[50] : Colors.grey[100]),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: userReaction != null ? Colors.blue : (isMine ? Colors.blue[100]! : Colors.grey[300]!),
+                  width: userReaction != null ? 1.5 : 1.0,
                 ),
-                if (count > 1) ...[
-                  SizedBox(width: 4),
+              ),
+              
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Text(
-                    count.toString(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.bold,
-                    ),
+                    emoji,
+                    style: const TextStyle(fontSize: 14),
                   ),
                 ],
-              ],
+              ),
             ),
           );
         }).toList(),
@@ -194,12 +203,12 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isMine) ...[
-            CircleAvatar(
+            const CircleAvatar(
               radius: 16,
               backgroundColor: Colors.blue,
               child: Text(
@@ -207,16 +216,17 @@ class MessageBubble extends StatelessWidget {
                 style: TextStyle(color: Colors.white, fontSize: 12),
               ),
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isMine 
+                    color: isMine
                         ? Theme.of(context).colorScheme.primary
                         : Colors.grey.shade200,
                     borderRadius: BorderRadius.circular(16),
@@ -224,15 +234,13 @@ class MessageBubble extends StatelessWidget {
                   child: _buildMessageContent(),
                 ),
                 
-                // REAÇÕES - AGORA DEVE APARECER
                 _buildReactions(),
                 
-                // TIMESTAMP
                 Padding(
-                  padding: EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     _formatTime(message.createdAt),
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.grey,
                       fontSize: 10,
                     ),
@@ -242,8 +250,8 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
           if (isMine) ...[
-            SizedBox(width: 8),
-            CircleAvatar(
+            const SizedBox(width: 8),
+            const CircleAvatar(
               radius: 16,
               backgroundColor: Colors.green,
               child: Text(

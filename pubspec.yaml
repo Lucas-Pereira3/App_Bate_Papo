@@ -1,4 +1,4 @@
-name: Ratozap_chat
+name: ratozap_chat
 description: Aplicativo de chat em tempo real com Flutter e Supabase
 
 publish_to: 'none'

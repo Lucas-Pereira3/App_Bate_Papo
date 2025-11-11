@@ -18,15 +18,23 @@ class CustomButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: 52, // Um pouco mais alto para um toque moderno
       child: ElevatedButton(
         onPressed: isLoading ? null : buttonAction,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
-          disabledBackgroundColor: backgroundColor.withOpacity(0.6),
+          disabledBackgroundColor: backgroundColor.withAlpha((255 * 0.6).round()),
+          foregroundColor: Colors.white, // Garante que o texto/ícone seja branco
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.0), // Cantos arredondados
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         child: isLoading
-            ? SizedBox(
+            ? const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(

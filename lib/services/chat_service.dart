@@ -10,14 +10,14 @@ import 'package:uuid/uuid.dart';
 class ChatService extends ChangeNotifier {
   final SupabaseClient _client = SupabaseConfig.client;
   final StorageService _storageService = StorageService();
-  final _uuid = Uuid();
+  final _uuid = const Uuid();
 
   StreamSubscription<List<Message>>? _messagesSub;
 
   Future<List<Message>> fetchMessages(String conversationId) async {
     try {
       print('🔍 Buscando mensagens para: $conversationId');
-      
+
       final res = await _client
           .from('messages')
           .select('''
@@ -26,18 +26,16 @@ class ChatService extends ChangeNotifier {
           ''')
           .eq('conversation_id', conversationId)
           .order('created_at', ascending: true);
-      
-      if (res == null) return [];
-      
-      final data = res as List<dynamic>;
+
+      final data = res;
       print('📨 ${data.length} mensagens encontradas');
-      
+
       final messages = data.map((e) {
-        final map = e as Map<String, dynamic>;
-        
+        final map = e;
+
         String content = '';
         String type = 'text';
-        
+
         if (map.containsKey('content') && map['content'] != null) {
           content = map['content'] as String;
         } else if (map.containsKey('payload')) {
@@ -45,7 +43,7 @@ class ChatService extends ChangeNotifier {
           content = payload?['content']?.toString() ?? '';
           type = payload?['type']?.toString() ?? 'text';
         }
-        
+
         DateTime createdAt;
         try {
           if (map['created_at'] is String) {
@@ -58,21 +56,22 @@ class ChatService extends ChangeNotifier {
         } catch (e) {
           createdAt = DateTime.now();
         }
-        
-        // PROCESSAR REAÇÕES - CORRIGIDO
+
+        // PROCESSAR REAÇÕES
         List<MessageReaction> reactions = [];
         final reactionsData = map['message_reactions'] as List<dynamic>?;
         if (reactionsData != null) {
           for (final reactionMap in reactionsData) {
             try {
-              final reaction = MessageReaction.fromMap(reactionMap as Map<String, dynamic>);
+              final reaction =
+                  MessageReaction.fromMap(reactionMap as Map<String, dynamic>);
               reactions.add(reaction);
             } catch (e) {
               print('⚠️ Erro ao processar reação: $e');
             }
           }
         }
-        
+
         return Message(
           id: map['id'] as String,
           conversationId: map['conversation_id'] as String,
@@ -85,9 +84,8 @@ class ChatService extends ChangeNotifier {
           isDeleted: map['is_deleted'] as bool? ?? false,
         );
       }).toList();
-      
+
       return messages;
-      
     } catch (e) {
       print('❌ Erro ao buscar mensagens: $e');
       return [];
@@ -102,91 +100,91 @@ class ChatService extends ChangeNotifier {
           .eq('conversation_id', conversationId)
           .order('created_at')
           .asyncMap((events) async {
-            final messagesWithReactions = await Future.wait(
-              events.map((event) async {
-                final map = event as Map<String, dynamic>;
-                
-                String content = '';
-                String type = 'text';
-                
-                if (map.containsKey('content') && map['content'] != null) {
-                  content = map['content'] as String;
-                } else if (map.containsKey('payload')) {
-                  final payload = map['payload'] as Map<String, dynamic>?;
-                  content = payload?['content']?.toString() ?? '';
-                  type = payload?['type']?.toString() ?? 'text';
-                }
-                
-                DateTime createdAt;
-                try {
-                  if (map['created_at'] is String) {
-                    createdAt = DateTime.parse(map['created_at'] as String);
-                  } else if (map['inserted_at'] is String) {
-                    createdAt = DateTime.parse(map['inserted_at'] as String);
-                  } else {
-                    createdAt = DateTime.now();
-                  }
-                } catch (e) {
-                  createdAt = DateTime.now();
-                }
-                
-                // BUSCAR REAÇÕES SEPARADAMENTE - CORRIGIDO
-                List<MessageReaction> reactions = [];
-                try {
-                  final reactionsResponse = await _client
-                      .from('message_reactions')
-                      .select()
-                      .eq('message_id', map['id']);
-                  
-                  if (reactionsResponse != null && reactionsResponse is List) {
-                    for (final reactionData in reactionsResponse) {
-                      try {
-                        final reaction = MessageReaction.fromMap(reactionData as Map<String, dynamic>);
-                        reactions.add(reaction);
-                      } catch (e) {
-                        print('⚠️ Erro ao processar reação do stream: $e');
-                      }
-                    }
-                  }
-                } catch (e) {
-                  print('⚠️ Erro ao buscar reações para mensagem ${map['id']}: $e');
-                }
-                
-                return Message(
-                  id: map['id'] as String,
-                  conversationId: map['conversation_id'] as String,
-                  senderId: map['sender_id'] as String,
-                  content: content,
-                  type: type,
-                  createdAt: createdAt,
-                  reactions: reactions,
-                  isEdited: map['is_edited'] as bool? ?? false,
-                  isDeleted: map['is_deleted'] as bool? ?? false,
-                );
-              })
-            );
+        final messagesWithReactions = await Future.wait(
+            events.map((map) async {
+          String content = '';
+          String type = 'text';
+
+          if (map.containsKey('content') && map['content'] != null) {
+            content = map['content'] as String;
+          } else if (map.containsKey('payload')) {
+            final payload = map['payload'] as Map<String, dynamic>?;
+            content = payload?['content']?.toString() ?? '';
+            type = payload?['type']?.toString() ?? 'text';
+          }
+
+          DateTime createdAt;
+          try {
+            if (map['created_at'] is String) {
+              createdAt = DateTime.parse(map['created_at'] as String);
+            } else if (map['inserted_at'] is String) {
+              createdAt = DateTime.parse(map['inserted_at'] as String);
+            } else {
+              createdAt = DateTime.now();
+            }
+          } catch (e) {
+            createdAt = DateTime.now();
+          }
+
+          List<MessageReaction> reactions = [];
+          try {
+            final reactionsResponse = await _client
+                .from('message_reactions')
+                .select()
+                .eq('message_id', map['id']);
+
             
-            return messagesWithReactions;
-          });
+              for (final reactionData in reactionsResponse) {
+                try {
+                  final reaction = MessageReaction.fromMap(
+                      reactionData);
+                  reactions.add(reaction);
+                } catch (e) {
+                  print('⚠️ Erro ao processar reação individual: $e');
+                }
+              }
+            
+          } catch (e) {
+            print(
+                '❌ Erro ao BUSCAR reações para ${map['id']}: $e. O stream continuará.');
+          }
+
+          return Message(
+            id: map['id'] as String,
+            conversationId: map['conversation_id'] as String,
+            senderId: map['sender_id'] as String,
+            content: content,
+            type: type,
+            createdAt: createdAt,
+            reactions: reactions,
+            isEdited: map['is_edited'] as bool? ?? false,
+            isDeleted: map['is_deleted'] as bool? ?? false,
+          );
+        }));
+
+        return messagesWithReactions;
+      });
     } catch (e) {
-      print('❌ Erro na subscription: $e');
+      print('❌ Erro GERAL na subscription (versão híbrida): $e');
       return Stream.value([]);
     }
   }
 
-  Future<void> sendTextMessage(String conversationId, String senderId, String text) async {
+  Future<void> sendTextMessage(
+      String conversationId, String senderId, String text) async {
     try {
       final id = _uuid.v4();
-      
+
       await _client.from('messages').insert({
         'id': id,
         'conversation_id': conversationId,
         'sender_id': senderId,
         'content': text,
         'type': 'text',
-        'created_at': DateTime.now().toIso8601String(),
+        
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
-      
+
       print('✅ Mensagem enviada: $text');
     } catch (e) {
       print('❌ Erro ao enviar mensagem: $e');
@@ -198,12 +196,14 @@ class ChatService extends ChangeNotifier {
     return await _storageService.uploadMessageImage(bytes, filename);
   }
 
-  Future<void> sendImageMessage(String conversationId, String senderId, Uint8List imageBytes, String filename) async {
+  Future<void> sendImageMessage(String conversationId, String senderId,
+      Uint8List imageBytes, String filename) async {
     try {
       print('📤 Iniciando envio de imagem...');
-      
-      final imageUrl = await _storageService.uploadMessageImage(imageBytes, filename);
-      
+
+      final imageUrl =
+          await _storageService.uploadMessageImage(imageBytes, filename);
+
       final id = _uuid.v4();
       await _client.from('messages').insert({
         'id': id,
@@ -211,9 +211,10 @@ class ChatService extends ChangeNotifier {
         'sender_id': senderId,
         'content': imageUrl,
         'type': 'image',
-        'created_at': DateTime.now().toIso8601String(),
+        
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
-      
+
       print('✅ Mensagem de imagem enviada');
     } catch (e) {
       print('❌ Erro ao enviar imagem: $e');
@@ -224,18 +225,16 @@ class ChatService extends ChangeNotifier {
   Future<void> addReaction(String messageId, String userId, String emoji) async {
     try {
       print('😊 Adicionando reação: $emoji à mensagem: $messageId');
-      
-      final response = await _client.rpc('add_message_reaction', params: {
+
+      await _client.rpc('add_message_reaction', params: {
         'p_message_id': messageId,
         'p_user_id': userId,
         'p_emoji': emoji,
       });
-      
-      print('✅ Reação adicionada via função: $response');
-      
-      // FORÇAR ATUALIZAÇÃO
+
+      print('✅ Reação adicionada via função');
+
       notifyListeners();
-      
     } catch (e) {
       print('❌ Erro ao adicionar reação: $e');
       rethrow;
@@ -245,11 +244,9 @@ class ChatService extends ChangeNotifier {
   Future<void> removeReaction(String reactionId) async {
     try {
       print('🗑️ Removendo reação: $reactionId');
-      
-      await _client.from('message_reactions')
-          .delete()
-          .eq('id', reactionId);
-      
+
+      await _client.from('message_reactions').delete().eq('id', reactionId);
+
       print('✅ Reação removida com sucesso');
     } catch (e) {
       print('❌ Erro ao remover reação: $e');
@@ -261,22 +258,20 @@ class ChatService extends ChangeNotifier {
     try {
       print('✏️ Editando mensagem: $messageId');
       print('📝 Novo conteúdo: $newContent');
-      
+
       final updateData = {
         'content': newContent,
         'is_edited': true,
       };
-      
+
       try {
-        updateData['updated_at'] = DateTime.now().toIso8601String();
+        updateData['updated_at'] = DateTime.now().toUtc().toIso8601String(); // 📍 BÔNUS: Corrigido aqui também
       } catch (e) {
         print('⚠️ Coluna updated_at não disponível');
       }
-      
-      await _client.from('messages')
-          .update(updateData)
-          .eq('id', messageId);
-      
+
+      await _client.from('messages').update(updateData).eq('id', messageId);
+
       print('✅ Mensagem editada com sucesso');
     } catch (e) {
       print('❌ Erro ao editar mensagem: $e');
@@ -287,24 +282,18 @@ class ChatService extends ChangeNotifier {
   Future<void> deleteMessage(String messageId) async {
     try {
       print('🗑️ Excluindo mensagem: $messageId');
-      
-      // EXCLUSÃO REAL - método mais direto
-      final response = await _client.from('messages')
-          .delete()
-          .eq('id', messageId);
-      
+
+      await _client.from('messages').delete().eq('id', messageId);
+
       print('✅ Mensagem excluída com sucesso');
-      
-      // FORÇAR ATUALIZAÇÃO IMEDIATA
+
       notifyListeners();
-      
     } catch (e) {
       print('❌ Erro ao excluir mensagem: $e');
       rethrow;
     }
   }
 
-  // MÉTODO NOVO: Verificar se mensagem foi excluída
   Future<bool> isMessageDeleted(String messageId) async {
     try {
       final response = await _client
@@ -312,48 +301,49 @@ class ChatService extends ChangeNotifier {
           .select()
           .eq('id', messageId)
           .maybeSingle();
-      
-      return response == null; // Se não encontrou, foi excluída
+
+      return response == null;
     } catch (e) {
       return true;
     }
   }
 
-  Future<String> createConversation(String name, bool isGroup, bool isPublic, List<String> participantIds) async {
+  Future<String> createConversation(
+      String name, bool isGroup, bool isPublic, List<String> participantIds) async {
     try {
       final conversationId = _uuid.v4();
       final currentUserId = _client.auth.currentUser!.id;
-      
+
       print('🆕 Criando conversa: $name');
       print('👥 Participantes: $participantIds');
-      
+
       await _client.from('conversations').insert({
         'id': conversationId,
         'name': name,
         'is_group': isGroup,
         'is_public': isPublic,
         'created_by': currentUserId,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(), 
       });
-      
+
       for (final userId in participantIds) {
         await _client.from('participants').insert({
           'id': _uuid.v4(),
           'conversation_id': conversationId,
           'user_id': userId,
-          'joined_at': DateTime.now().toIso8601String(),
+          'joined_at': DateTime.now().toUtc().toIso8601String(), 
         });
       }
-      
+
       await sendTextMessage(
-        conversationId, 
-        currentUserId, 
-        isGroup ? 'Grupo "$name" criado! 🎉' : 'Conversa iniciada! 👋'
-      );
-      
+          conversationId,
+          currentUserId,
+          isGroup
+              ? 'Grupo "$name" criado! 🎉'
+              : 'Conversa iniciada! 👋');
+
       print('✅ Conversa criada com sucesso: $conversationId');
       return conversationId;
-      
     } catch (e) {
       print('❌ Erro ao criar conversa: $e');
       rethrow;

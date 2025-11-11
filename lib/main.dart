@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'core/supabase_config.dart';
 import 'ui/features/auth/login_screen.dart';
 import 'ui/features/auth/register_screen.dart';
+import 'ui/features/auth/forgot_password_screen.dart';
 import 'ui/features/home/home_screen.dart';
 import 'ui/features/chat/chat_screen.dart';
 import 'ui/features/profile/edit_profile_screen.dart';
@@ -23,6 +24,8 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -35,7 +38,7 @@ class MyApp extends StatelessWidget {
         Provider(create: (_) => StorageService()),
       ],
       child: MaterialApp(
-        title: 'Ratozap Chat',
+        title: 'Ratozap',
         theme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,
@@ -45,10 +48,11 @@ class MyApp extends StatelessWidget {
         routes: {
           '/login': (_) => LoginScreen(),
           '/register': (_) => RegisterScreen(),
-          '/home': (_) => HomeScreen(),
-          '/chat': (_) => ChatScreen(), // AGORA CORRETO - só uma importação
-          '/edit-profile': (_) => EditProfileScreen(),
-          '/search': (_) => SearchScreen(), // AGORA CORRETO
+          '/forgot-password': (_) => const ForgotPasswordScreen(),
+          '/home': (_) => const HomeScreen(),
+          '/chat': (_) => const ChatScreen(), 
+          '/edit-profile': (_) => const EditProfileScreen(),
+          '/search': (_) => const SearchScreen(), 
         },
       ),
     );

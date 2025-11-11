@@ -57,7 +57,7 @@ class ProfileService extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       
-      return response as Map<String, dynamic>?;
+      return response;
     } catch (e) {
       print('❌ Erro ao buscar perfil: $e');
       return null;

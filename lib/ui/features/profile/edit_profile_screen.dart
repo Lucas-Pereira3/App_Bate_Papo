@@ -105,24 +105,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Editar Perfil'),
+        title: const Text('Editar Perfil'),
         actions: [
           if (_isInitialized)
             IconButton(
               onPressed: _isLoading ? null : _saveProfile,
               icon: _isLoading 
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Icon(Icons.save),
+                  : const Icon(Icons.save),
             ),
         ],
       ),
       body: _isInitialized
           ? SingleChildScrollView(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
                   GestureDetector(
@@ -137,45 +137,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ? NetworkImage(user!.userMetadata!['avatar_url'] as String)
                                   : null) as ImageProvider?,
                           child: _imageBytes == null && user?.userMetadata?['avatar_url'] == null
-                              ? Icon(Icons.person, size: 40, color: Colors.white)
+                              ? const Icon(Icons.person, size: 40, color: Colors.white)
                               : null,
                         ),
                         Positioned(
                           bottom: 0,
                           right: 0,
                           child: Container(
-                            padding: EdgeInsets.all(4),
-                            decoration: BoxDecoration(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
                               color: Colors.blue,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                            child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(height: 20),
+                  const SizedBox(height: 20),
                   TextFormField(
                     initialValue: user?.email ?? '',
                     decoration: InputDecoration(
                       labelText: 'Email',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       filled: true,
                       fillColor: Colors.grey[100],
                     ),
                     readOnly: true,
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _nameController,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Nome completo',
                       border: OutlineInputBorder(),
                       hintText: 'Digite seu nome completo',
                     ),
                   ),
-                  SizedBox(height: 24),
+                 const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -188,7 +188,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       ),
                       child: _isLoading
-                          ? SizedBox(
+                          ? const  SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
@@ -196,7 +196,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : Text(
+                          : const Text(
                               'Salvar Alterações',
                               style: TextStyle(
                                 color: Colors.white,
@@ -209,7 +209,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ],
               ),
             )
-          : Center(
+          : const Center(
               child: CircularProgressIndicator(),
             ),
     );
