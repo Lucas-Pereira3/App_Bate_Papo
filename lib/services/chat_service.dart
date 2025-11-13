@@ -26,7 +26,7 @@ class ChatService extends ChangeNotifier {
             message_reactions(*)
           ''')
           .eq('conversation_id', conversationId)
-          .order('created_at', ascending: false); // 📍 CORRIGIDO: false para chat reverso
+          .order('created_at', ascending: false); 
 
       final data = res;
       print('📨 ${data.length} mensagens encontradas');
@@ -100,7 +100,7 @@ class ChatService extends ChangeNotifier {
           .from('messages')
           .stream(primaryKey: ['id'])
           .eq('conversation_id', conversationId)
-          .order('created_at', ascending: false) // 📍 CORRIGIDO: false para chat reverso
+          .order('created_at', ascending: false) 
           .asyncMap((events) async {
         final messagesWithReactions = await Future.wait(
             events.map((map) async {
