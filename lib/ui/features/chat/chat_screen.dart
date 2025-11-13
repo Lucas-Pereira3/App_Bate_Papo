@@ -143,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.minScrollExtent, // 📍 ALTERAÇÃO AQUI (era maxScrollExtent)
+          _scrollController.position.minScrollExtent, 
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -553,7 +553,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       )
                     : ListView.builder(
                         controller: _scrollController,
-                        reverse: true, // 📍 ALTERAÇÃO AQUI (adicionado)
+                        reverse: true, 
                         itemCount: _messages.length,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         itemBuilder: (ctx, i) {
