@@ -20,7 +20,7 @@ void main() async {
   
   await SupabaseConfig.init();
   
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

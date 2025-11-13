@@ -14,6 +14,7 @@ class ChatService extends ChangeNotifier {
 
   StreamSubscription<List<Message>>? _messagesSub;
 
+  /// Busca mensagens iniciais (ordem: mais novas primeiro)
   Future<List<Message>> fetchMessages(String conversationId) async {
     try {
       print('🔍 Buscando mensagens para: $conversationId');
@@ -25,7 +26,7 @@ class ChatService extends ChangeNotifier {
             message_reactions(*)
           ''')
           .eq('conversation_id', conversationId)
-          .order('created_at', ascending: true);
+          .order('created_at', ascending: false); // 📍 CORRIGIDO: false para chat reverso
 
       final data = res;
       print('📨 ${data.length} mensagens encontradas');
@@ -92,13 +93,14 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  /// Ouve novas mensagens em tempo real
   Stream<List<Message>> subscribeMessages(String conversationId) {
     try {
       return _client
           .from('messages')
           .stream(primaryKey: ['id'])
           .eq('conversation_id', conversationId)
-          .order('created_at')
+          .order('created_at', ascending: false) // 📍 CORRIGIDO: false para chat reverso
           .asyncMap((events) async {
         final messagesWithReactions = await Future.wait(
             events.map((map) async {
@@ -133,7 +135,6 @@ class ChatService extends ChangeNotifier {
                 .select()
                 .eq('message_id', map['id']);
 
-            
               for (final reactionData in reactionsResponse) {
                 try {
                   final reaction = MessageReaction.fromMap(
@@ -181,7 +182,6 @@ class ChatService extends ChangeNotifier {
         'sender_id': senderId,
         'content': text,
         'type': 'text',
-        
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
@@ -211,7 +211,6 @@ class ChatService extends ChangeNotifier {
         'sender_id': senderId,
         'content': imageUrl,
         'type': 'image',
-        
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
@@ -233,7 +232,6 @@ class ChatService extends ChangeNotifier {
       });
 
       print('✅ Reação adicionada via função');
-
       notifyListeners();
     } catch (e) {
       print('❌ Erro ao adicionar reação: $e');
@@ -244,9 +242,7 @@ class ChatService extends ChangeNotifier {
   Future<void> removeReaction(String reactionId) async {
     try {
       print('🗑️ Removendo reação: $reactionId');
-
       await _client.from('message_reactions').delete().eq('id', reactionId);
-
       print('✅ Reação removida com sucesso');
     } catch (e) {
       print('❌ Erro ao remover reação: $e');
@@ -265,13 +261,12 @@ class ChatService extends ChangeNotifier {
       };
 
       try {
-        updateData['updated_at'] = DateTime.now().toUtc().toIso8601String(); // 📍 BÔNUS: Corrigido aqui também
+        updateData['updated_at'] = DateTime.now().toUtc().toIso8601String();
       } catch (e) {
         print('⚠️ Coluna updated_at não disponível');
       }
 
       await _client.from('messages').update(updateData).eq('id', messageId);
-
       print('✅ Mensagem editada com sucesso');
     } catch (e) {
       print('❌ Erro ao editar mensagem: $e');
@@ -282,11 +277,8 @@ class ChatService extends ChangeNotifier {
   Future<void> deleteMessage(String messageId) async {
     try {
       print('🗑️ Excluindo mensagem: $messageId');
-
       await _client.from('messages').delete().eq('id', messageId);
-
       print('✅ Mensagem excluída com sucesso');
-
       notifyListeners();
     } catch (e) {
       print('❌ Erro ao excluir mensagem: $e');
@@ -301,7 +293,6 @@ class ChatService extends ChangeNotifier {
           .select()
           .eq('id', messageId)
           .maybeSingle();
-
       return response == null;
     } catch (e) {
       return true;
@@ -346,6 +337,45 @@ class ChatService extends ChangeNotifier {
       return conversationId;
     } catch (e) {
       print('❌ Erro ao criar conversa: $e');
+      rethrow;
+    }
+  }
+
+  
+  Future<void> deleteConversation(String conversationId) async {
+    try {
+      print('🗑️ Iniciando exclusão completa da conversa: $conversationId');
+      
+      
+      await _client
+          .from('messages')
+          .delete()
+          .eq('conversation_id', conversationId);
+      print('✅ Mensagens apagadas');
+
+      
+      await _client
+          .from('participants')
+          .delete()
+          .eq('conversation_id', conversationId);
+      print('✅ Participantes apagados');
+
+      
+      final response = await _client
+          .from('conversations')
+          .delete()
+          .eq('id', conversationId)
+          .select(); 
+
+      
+      if (response.isEmpty) {
+         throw 'Falha: Permissão negada ou conversa já removida.';
+      }
+
+      print('✅ Conversa apagada com sucesso');
+      notifyListeners();
+    } catch (e) {
+      print('❌ Erro ao excluir conversa: $e');
       rethrow;
     }
   }

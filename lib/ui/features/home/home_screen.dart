@@ -55,17 +55,73 @@ class _HomeScreenState extends State<HomeScreen> {
               messages(id, content, created_at, type, is_deleted)
             )
           ''')
-          .eq('user_id', currentUserId);
+          .eq('user_id', currentUserId)
+          // Ordenação inicial pela criação da conversa
+          .order('created_at', referencedTable: 'conversations', ascending: false);
 
-      final conversations = (response as List<dynamic>)
+      var conversations = (response as List<dynamic>)
           .map((item) => item['conversation'] as Map<String, dynamic>)
           .toList();
+
+      // Ordenação final baseada na mensagem mais recente (igual WhatsApp)
+      conversations.sort((a, b) {
+        final messagesA = a['messages'] as List<dynamic>? ?? [];
+        final messagesB = b['messages'] as List<dynamic>? ?? [];
+        
+        if (messagesA.isEmpty && messagesB.isEmpty) return 0;
+        if (messagesA.isEmpty) return 1;
+        if (messagesB.isEmpty) return -1;
+
+        final lastMessageA = DateTime.parse(messagesA.last['created_at']);
+        final lastMessageB = DateTime.parse(messagesB.last['created_at']);
+        return lastMessageB.compareTo(lastMessageA);
+      });
 
       return conversations;
     } catch (e) {
       print('Erro ao carregar conversas: $e');
       return [];
     }
+  }
+
+  // 🗑️ NOVA FUNÇÃO: Abre o alerta de exclusão
+  void _confirmDelete(String conversationId, String name, bool isGroup) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isGroup ? 'Excluir Grupo' : 'Excluir Conversa'),
+        content: Text(
+            'Tem certeza que deseja apagar "$name"?\n'
+            'Essa ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx); // Fecha o diálogo
+              try {
+                final chatService = Provider.of<ChatService>(context, listen: false);
+                // Chama a nova função do service
+                await chatService.deleteConversation(conversationId);
+                
+                if(mounted) {
+                  _showSnackbar(context, 'Apagado com sucesso!', isError: false);
+                  _loadConversations(); // Atualiza a lista visualmente
+                }
+              } catch (e) {
+                if(mounted) {
+                   _showSnackbar(context, 'Erro ao apagar: $e');
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Apagar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _createNewConversation(BuildContext context) {
@@ -120,13 +176,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ],
-                const SizedBox(height: 8),
-                Text(
-                  isGroup 
-                    ? 'Grupo ${isPublic ? 'público' : 'privado'} criado'
-                    : 'Conversa individual criada',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
               ],
             ),
             actions: [
@@ -190,11 +239,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final difference = now.difference(date);
       
       if (difference.inDays > 0) {
-        return '${difference.inDays}d';
+        return '${date.day}/${date.month}/${date.year}';
       } else if (difference.inHours > 0) {
-        return '${difference.inHours}h';
+        return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
       } else if (difference.inMinutes > 0) {
-        return '${difference.inMinutes}m';
+        return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
       } else {
         return 'Agora';
       }
@@ -219,10 +268,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ratozap- Conversas'),
+        title: const Text('Ratozap'),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon:const Icon(Icons.search),
@@ -258,13 +309,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Icon(Icons.error, size: 64, color: Colors.red),
                   const SizedBox(height: 16),
                   const Text('Erro ao carregar conversas'),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadConversations,
                     child: const Text('Tentar Novamente'),
@@ -284,19 +328,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Icon(Icons.chat, size: 64, color: Colors.grey),
                   const SizedBox(height: 16),
                   const Text(
-                    'Nenhuma conversa encontrada',
+                    'Nenhuma conversa',
                     style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Toque no botão + para iniciar uma conversa',
-                    style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
                     onPressed: () => _createNewConversation(context),
                     icon: const Icon(Icons.add),
-                    label: const Text('Criar Primeira Conversa'),
+                    label: const Text('Criar Conversa'),
                   ),
                 ],
               ),
@@ -305,8 +344,15 @@ class _HomeScreenState extends State<HomeScreen> {
           
           return RefreshIndicator(
             onRefresh: _loadConversations,
-            child: ListView.builder(
+            // Lista com divisores estilo WhatsApp
+            child: ListView.separated(
               itemCount: conversations.length,
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                thickness: 0.5,
+                indent: 80, // Espaço para o avatar
+                endIndent: 16,
+              ),
               itemBuilder: (ctx, i) {
                 final conv = conversations[i];
                 final name = conv['name'] ?? 'Chat';
@@ -316,47 +362,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 final messages = conv['messages'] as List<dynamic>? ?? [];
                 final lastMessageText = _getLastMessageText(messages);
                 
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: isGroup ? Colors.green : Colors.blue,
-                      child: Text(
-                        name[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      ),
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  leading: CircleAvatar(
+                    radius: 28, 
+                    backgroundColor: isGroup ? Colors.green : Colors.blue,
+                    child: Text(
+                      name[0].toUpperCase(),
+                      style: const TextStyle(color: Colors.white, fontSize: 20),
                     ),
-                    title: Row(
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        if (isGroup) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.group, size: 16, color: Colors.grey),
-                        ]
-                      ],
-                    ),
-                    subtitle: Text(
-                      lastMessageText,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                    trailing: messages.isNotEmpty 
-                      ? Text(
-                          _formatTime(messages.last['created_at']),
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
-                        )
-                      : null,
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context, 
-                        RoutesEnum.chat, 
-                        arguments: {'conversationId': id}
-                      );
-                    },
                   ),
+                  title: Row(
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                      ),
+                      if (isGroup) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.group, size: 16, color: Colors.grey),
+                      ]
+                    ],
+                  ),
+                  subtitle: Text(
+                    lastMessageText,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  trailing: messages.isNotEmpty 
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _formatTime(messages.last['created_at']),
+                            style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                        ],
+                      )
+                    : null,
+                  // 👇 AQUI ESTÁ O EVENTO PARA ABRIR O CHAT
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context, 
+                      RoutesEnum.chat, 
+                      arguments: {'conversationId': id}
+                    );
+                  },
+                  // 👇 AQUI ESTÁ A ALTERAÇÃO: Pressionar e segurar para apagar
+                  onLongPress: () {
+                    _confirmDelete(id, name, isGroup);
+                  },
                 );
               },
             ),
@@ -364,8 +421,8 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: Colors.green,
+        child: const Icon(Icons.message, color: Colors.white),
         onPressed: () => _createNewConversation(context),
       ),
     );
