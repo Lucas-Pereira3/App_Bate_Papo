@@ -82,11 +82,13 @@ class _SearchScreenState extends State<SearchScreen> {
         [currentUserId, user['id']],
       );
 
+      
       Navigator.pushReplacementNamed(
         context, 
         '/chat',
-        arguments: {'conversationId': conversationId}
+        arguments: {'conversationId': conversationId, 'conversationName': user['full_name'] ?? 'Chat'} // <-- Linha modificada
       );
+      
 
       _showSnackbar('Conversa iniciada!', isError: false);
     } catch (e) {
@@ -114,11 +116,13 @@ class _SearchScreenState extends State<SearchScreen> {
         [currentUserId],
       );
 
+      
       Navigator.pushReplacementNamed(
         context, 
         '/chat',
-        arguments: {'conversationId': group['id']}
+        arguments: {'conversationId': group['id'], 'conversationName': group['name'] ?? 'Grupo'} 
       );
+      
 
       _showSnackbar('Entrou no grupo!', isError: false);
     } catch (e) {

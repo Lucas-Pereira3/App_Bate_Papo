@@ -59,6 +59,7 @@ class MessageReaction {
   final String userId;
   final String emoji;
   final DateTime createdAt;
+  final String? conversationId;
 
   MessageReaction({
     required this.id,
@@ -66,6 +67,7 @@ class MessageReaction {
     required this.userId,
     required this.emoji,
     required this.createdAt,
+    this.conversationId,
   });
 
   factory MessageReaction.fromMap(Map<String, dynamic> map) {
@@ -75,6 +77,7 @@ class MessageReaction {
       userId: map['user_id'] as String,
       emoji: map['emoji'] as String,
       createdAt: DateTime.parse(map['created_at'] as String),
+      conversationId: map['conversation_id'] as String?,
     );
   }
 }

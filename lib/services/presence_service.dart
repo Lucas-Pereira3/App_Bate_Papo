@@ -41,15 +41,18 @@ class PresenceService extends ChangeNotifier {
         });
   }
 
-  void startTyping(String conversationId) {
+  
+  void startTyping(String conversationId, String userName) {
     final userId = _client.auth.currentUser!.id;
     _client.from('typing_indicators').upsert({
       'user_id': userId,
       'conversation_id': conversationId,
+      'user_name': userName, 
       'typing': true,
       'updated_at': DateTime.now().toIso8601String(),
     });
   }
+  
 
   void stopTyping(String conversationId) {
     final userId = _client.auth.currentUser!.id;

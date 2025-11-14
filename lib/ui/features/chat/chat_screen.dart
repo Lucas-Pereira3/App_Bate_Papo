@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/presence_service.dart';
+import '../../../services/profile_service.dart';
 import '../../../ui/widgets/message_bubble.dart';
 import '../../../models/message_model.dart';
+import '../../../core/supabase_config.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -27,6 +29,14 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isTyping = false;
   final Map<String, String> _typingUsers = {};
 
+  String _conversationName = 'Chat';
+  String _otherUserId = '';
+  bool _isGroupChat = false;
+  bool _isOtherUserOnline = false;
+  StreamSubscription? _userStatusSubscription;
+  
+  StreamSubscription? _reactionsSubscription;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -37,12 +47,90 @@ class _ChatScreenState extends State<ChatScreen> {
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
     _conversationId = args?['conversationId'] ?? '';
+    _conversationName = args?['conversationName'] ?? 'Chat';
 
     if (_conversationId.isNotEmpty) {
+      await _loadParticipants();
       await _loadInitialMessages();
       _subscribeToMessages();
       _subscribeToTyping();
+      _subscribeToReactions(); 
+
+      if (!_isGroupChat && _otherUserId.isNotEmpty) {
+        _subscribeToUserStatus();
+      }
     }
+  }
+
+  Future<void> _loadParticipants() async {
+    final client = SupabaseConfig.client;
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final myId = auth.currentUser!.id;
+
+    try {
+      final response = await client
+          .from('participants')
+          .select('user_id')
+          .eq('conversation_id', _conversationId);
+
+      final participants = (response as List<dynamic>)
+          .map((e) => e['user_id'] as String)
+          .toList();
+
+      if (participants.length > 2) {
+        if (mounted) setState(() => _isGroupChat = true);
+      } else if (participants.length == 2) {
+        if (mounted) {
+          setState(() {
+            _isGroupChat = false;
+            _otherUserId =
+                participants.firstWhere((id) => id != myId, orElse: () => '');
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isGroupChat = false);
+      }
+    } catch (e) {
+      print('❌ Erro ao buscar participantes: $e');
+    }
+  }
+
+  void _subscribeToUserStatus() {
+    final presenceService = Provider.of<PresenceService>(context, listen: false);
+    _userStatusSubscription?.cancel();
+    _userStatusSubscription =
+        presenceService.subscribeToUserStatus(_otherUserId).listen((status) {
+      if (mounted) {
+        setState(() {
+          _isOtherUserOnline = status['online'] ?? false;
+        });
+      }
+    });
+  }
+
+  void _subscribeToReactions() {
+    final client = SupabaseConfig.client;
+    _reactionsSubscription?.cancel();
+
+    _reactionsSubscription = client
+        .from('message_reactions')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', _conversationId) 
+        .listen(
+      (data) {
+        // Alguém reagiu. Recarregamos a lista de mensagens.
+        print('🔄 Reação mudou, recarregando mensagens...');
+        
+        // Evita chamadas duplicadas se já estiver carregando
+        if (!_isLoading && mounted) {
+          // Usamos a função que já busca mensagens E reações juntas!
+          _loadInitialMessages();
+        }
+      },
+      onError: (error) {
+        print('❌ Erro na subscription de reações: $error');
+      },
+    );
   }
 
   Future<void> _loadInitialMessages() async {
@@ -50,73 +138,66 @@ class _ChatScreenState extends State<ChatScreen> {
       final chatService = Provider.of<ChatService>(context, listen: false);
       final messages = await chatService.fetchMessages(_conversationId);
 
-      setState(() {
-        _messages = messages;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _messages = messages;
+          _isLoading = false;
+        });
+      }
 
       _scrollToBottom();
     } catch (e) {
       print('❌ Erro ao carregar mensagens: $e');
       if (mounted) {
         _showErrorSnackbar('Erro ao carregar mensagens');
+        setState(() {
+          _isLoading = false;
+        });
       }
-      setState(() {
-        _isLoading = false;
-      });
     }
   }
 
   void _subscribeToMessages() {
     final chatService = Provider.of<ChatService>(context, listen: false);
-
     _messagesSubscription?.cancel();
 
     _messagesSubscription = chatService.subscribeMessages(_conversationId).listen(
       (newMessages) {
-        print('🔄 Subscription atualizada: ${newMessages.length} mensagens');
-
-        final currentMessageIds = _messages.map((m) => m.id).toSet();
-        final newMessageIds = newMessages.map((m) => m.id).toSet();
-        final removedMessageIds = currentMessageIds.difference(newMessageIds);
-
-        if (removedMessageIds.isNotEmpty) {
-          print('🗑️ Mensagens removidas na subscription: $removedMessageIds');
+        print('🔄 Subscription de mensagens: ${newMessages.length} mensagens');
+        
+        if (mounted) {
+          setState(() {
+            _messages = newMessages;
+          });
         }
-
-        setState(() {
-          _messages = newMessages;
-        });
-
         _scrollToBottom();
       },
       onError: (error) {
-        print('❌ Erro na subscription: $error');
+        print('❌ Erro na subscription de mensagens: $error');
         _showErrorSnackbar('Erro na conexão em tempo real');
-
-        Future.delayed(const Duration(seconds: 3), () {
-          if (_conversationId.isNotEmpty) {
-            _subscribeToMessages();
-          }
-        });
       },
     );
   }
 
   void _subscribeToTyping() {
     final presenceService = Provider.of<PresenceService>(context, listen: false);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final currentUserId = auth.currentUser?.id ?? '';
 
     _typingSubscription?.cancel();
-
     _typingSubscription =
         presenceService.subscribeToTyping(_conversationId).listen(
       (typingEvents) {
-        setState(() {
-          _typingUsers.clear();
-          for (final event in typingEvents) {
-            _typingUsers[event['user_id']] = event['user_name'] ?? 'Usuário';
-          }
-        });
+        if (mounted) {
+          setState(() {
+            _typingUsers.clear();
+            for (final event in typingEvents) {
+              if (event['user_id'] != currentUserId) {
+                _typingUsers[event['user_id']] = event['user_name'] ?? 'Usuário';
+              }
+            }
+          });
+        }
       },
     );
   }
@@ -126,7 +207,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _isTyping = true;
       final presenceService =
           Provider.of<PresenceService>(context, listen: false);
-      presenceService.startTyping(_conversationId);
+      final profileService = Provider.of<ProfileService>(context, listen: false);
+      final myName = profileService.currentProfile?['full_name'] ?? 'Usuário';
+      presenceService.startTyping(_conversationId, myName);
     }
   }
 
@@ -143,7 +226,7 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.minScrollExtent, 
+          _scrollController.position.minScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -181,20 +264,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
     final userId = auth.currentUser?.id ?? '';
 
-    if (userId.isEmpty) {
-      _showErrorSnackbar('Usuário não autenticado');
-      return;
-    }
-
-    if (_conversationId.isEmpty) {
-      _showErrorSnackbar('Conversa não encontrada');
+    if (userId.isEmpty || _conversationId.isEmpty) {
+      _showErrorSnackbar('Erro: Usuário ou conversa inválida');
       return;
     }
 
     try {
       _textController.clear();
       _stopTyping();
-
       await chatService.sendTextMessage(_conversationId, userId, text);
     } catch (e) {
       print('❌ Erro ao enviar mensagem: $e');
@@ -212,7 +289,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (image != null) {
         final bytes = await image.readAsBytes();
-
         if (!mounted) return;
         final chatService = Provider.of<ChatService>(context, listen: false);
         final auth = Provider.of<AuthService>(context, listen: false);
@@ -225,7 +301,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
         await chatService.sendImageMessage(
             _conversationId, userId, bytes, image.name);
-
         _showSuccessSnackbar('Imagem enviada!');
       }
     } catch (e) {
@@ -325,11 +400,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       Provider.of<ChatService>(context, listen: false);
                   await chatService.editMessage(message.id, newContent);
 
-                  _loadInitialMessages();
-
                   if (!context.mounted) return;
-
-                  if (!mounted) return;
                   Navigator.pop(context);
                   _showSuccessSnackbar('Mensagem editada');
                 } catch (e) {
@@ -359,33 +430,18 @@ class _ChatScreenState extends State<ChatScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-
               _removeMessageLocally(message.id);
 
               try {
                 if (!mounted) return;
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
-
                 await chatService.deleteMessage(message.id);
-
-                await Future.delayed(const Duration(milliseconds: 1000));
-                final isTrulyDeleted =
-                    await chatService.isMessageDeleted(message.id);
-
-                if (isTrulyDeleted) {
-                  _showSuccessSnackbar('Mensagem excluída com sucesso');
-                } else {
-                  print('⚠️ Falha ao excluir a mensagem, recarregando...');
-                  _showErrorSnackbar(
-                      'Falha ao excluir. A mensagem será recarregada.');
-                  await _forceRefreshMessages();
-                }
+                // A subscription de mensagens deve atualizar a lista
               } catch (e) {
                 print('❌ Erro ao excluir mensagem: $e');
                 _showErrorSnackbar('Erro ao excluir mensagem: $e');
-
-                _loadInitialMessages();
+                _loadInitialMessages(); 
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -416,15 +472,16 @@ class _ChatScreenState extends State<ChatScreen> {
                             Provider.of<AuthService>(context, listen: false);
                         final userId = auth.currentUser?.id ?? '';
 
-                        await chatService.addReaction(message.id, userId, emoji);
-
-                        _loadInitialMessages(); 
-
+                        
+                        await chatService.addReaction(
+                          message.id,
+                          userId,
+                          emoji,
+                          _conversationId, 
+                        );
                         if (!context.mounted) return;
-
-                        if (!mounted) return;
                         Navigator.pop(context);
-                        _showSuccessSnackbar('Reação adicionada!');
+                       
                       } catch (e) {
                         _showErrorSnackbar('Erro ao adicionar reação: $e');
                       }
@@ -464,13 +521,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
                 await chatService.removeReaction(reaction.id);
 
-                _loadInitialMessages();
-
                 if (!context.mounted) return;
-
-                if (!mounted) return;
                 Navigator.pop(context);
-                _showSuccessSnackbar('Reação removida');
               } catch (e) {
                 _showErrorSnackbar('Erro ao remover reação: $e');
               }
@@ -487,6 +539,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messagesSubscription?.cancel();
     _typingSubscription?.cancel();
+    _userStatusSubscription?.cancel();
+    _reactionsSubscription?.cancel(); 
     _stopTyping();
     _textController.dispose();
     _scrollController.dispose();
@@ -503,7 +557,12 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Chat'),
+            Text(_conversationName),
+            if (!_isGroupChat && _isOtherUserOnline && _typingUsers.isEmpty)
+              const Text(
+                'Online',
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
             if (_typingUsers.isNotEmpty)
               Text(
                 '${_typingUsers.values.join(', ')} ${_typingUsers.length == 1 ? 'está' : 'estão'} digitando...',
@@ -515,9 +574,7 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              _forceRefreshMessages();
-            },
+            onPressed: _forceRefreshMessages,
           ),
         ],
       ),
@@ -528,7 +585,6 @@ class _ChatScreenState extends State<ChatScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _messages.isEmpty
-                    
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -553,7 +609,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       )
                     : ListView.builder(
                         controller: _scrollController,
-                        reverse: true, 
+                        reverse: true,
                         itemCount: _messages.length,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         itemBuilder: (ctx, i) {

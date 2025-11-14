@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .map((item) => item['conversation'] as Map<String, dynamic>)
           .toList();
 
-      // Ordenação final baseada na mensagem mais recente (igual WhatsApp)
+      // Ordenação final baseada na mensagem mais recente 
       conversations.sort((a, b) {
         final messagesA = a['messages'] as List<dynamic>? ?? [];
         final messagesB = b['messages'] as List<dynamic>? ?? [];
@@ -84,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 🗑️ NOVA FUNÇÃO: Abre o alerta de exclusão
+  
   void _confirmDelete(String conversationId, String name, bool isGroup) {
     showDialog(
       context: context,
@@ -100,15 +100,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(ctx); // Fecha o diálogo
+              Navigator.pop(ctx); 
               try {
                 final chatService = Provider.of<ChatService>(context, listen: false);
-                // Chama a nova função do service
+                
                 await chatService.deleteConversation(conversationId);
                 
                 if(mounted) {
                   _showSnackbar(context, 'Apagado com sucesso!', isError: false);
-                  _loadConversations(); // Atualiza a lista visualmente
+                  _loadConversations(); 
                 }
               } catch (e) {
                 if(mounted) {
@@ -344,13 +344,13 @@ class _HomeScreenState extends State<HomeScreen> {
           
           return RefreshIndicator(
             onRefresh: _loadConversations,
-            // Lista com divisores estilo WhatsApp
+            
             child: ListView.separated(
               itemCount: conversations.length,
               separatorBuilder: (context, index) => const Divider(
                 height: 1,
                 thickness: 0.5,
-                indent: 80, // Espaço para o avatar
+                indent: 80, 
                 endIndent: 16,
               ),
               itemBuilder: (ctx, i) {
@@ -402,15 +402,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       )
                     : null,
-                  // 👇 AQUI ESTÁ O EVENTO PARA ABRIR O CHAT
+                  
                   onTap: () {
                     Navigator.pushNamed(
                       context, 
                       RoutesEnum.chat, 
-                      arguments: {'conversationId': id}
+                      arguments: {'conversationId': id, 'conversationName': name} 
                     );
                   },
-                  // 👇 AQUI ESTÁ A ALTERAÇÃO: Pressionar e segurar para apagar
+                  
                   onLongPress: () {
                     _confirmDelete(id, name, isGroup);
                   },

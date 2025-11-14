@@ -11,7 +11,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.1.2
+  supabase_flutter: ^2.10.3
   provider: ^6.1.1
   image_picker: ^1.0.4
   uuid: ^4.2.1
