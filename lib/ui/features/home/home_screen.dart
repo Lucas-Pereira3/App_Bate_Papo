@@ -1,3 +1,5 @@
+// lib/ui/features/home/home_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
@@ -17,12 +19,43 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final SupabaseClient _client = SupabaseConfig.client;
   late Future<List<dynamic>> _conversationsFuture;
+  
+  // 🚀 1. CANAL DE TEMPO REAL
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _loadConversations();
     _setUserOnline();
+    _subscribeToChanges(); // 🚀 2. INICIA A ASSINATURA
+  }
+  
+  // 🚀 3. FUNÇÃO PARA OUVIR MUDANÇAS
+  void _subscribeToChanges() {
+    _channel = _client
+        .channel('public:messages')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          // Filtra para ouvir apenas mensagens das conversas do usuário
+          // (Isso requer que o RLS esteja ATIVADO e configurado,
+          // mas se o RLS estiver desativado, ele ouvirá TUDO, o que também funciona)
+          callback: (payload) {
+            print('🔄 Nova mensagem detectada! Recarregando a home...');
+            // Recarrega a lista de conversas
+            _loadConversations();
+          },
+        )
+        .subscribe();
+  }
+  
+  // 🚀 4. CANCELA A ASSINATURA AO SAIR DA TELA
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
   }
 
   void _setUserOnline() {
@@ -31,9 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadConversations() async {
-    setState(() {
-      _conversationsFuture = _fetchConversations();
-    });
+    // Apenas atualiza o estado se a tela ainda estiver "montada"
+    if (mounted) {
+      setState(() {
+        _conversationsFuture = _fetchConversations();
+      });
+    }
   }
 
   Future<List<dynamic>> _fetchConversations() async {
@@ -51,19 +87,41 @@ class _HomeScreenState extends State<HomeScreen> {
               created_by,
               is_group,
               is_public,
-              participants!inner(user_id),
+              
+              participants!inner(
+                user_id,
+                profile:profiles(full_name) 
+              ),
+              
               messages(id, content, created_at, type, is_deleted)
             )
           ''')
           .eq('user_id', currentUserId)
-          // Ordenação inicial pela criação da conversa
           .order('created_at', referencedTable: 'conversations', ascending: false);
 
       var conversations = (response as List<dynamic>)
           .map((item) => item['conversation'] as Map<String, dynamic>)
           .toList();
+          
+      for (var conv in conversations) {
+        final isGroup = conv['is_group'] == true;
+        
+        if (!isGroup) {
+          final participants = conv['participants'] as List<dynamic>? ?? [];
+          final otherParticipant = participants.firstWhere(
+            (p) => p['user_id'] != currentUserId,
+            orElse: () => null,
+          );
+          
+          if (otherParticipant != null) {
+            final profile = otherParticipant['profile'] as Map<String, dynamic>?;
+            if (profile != null && profile['full_name'] != null) {
+              conv['name'] = profile['full_name'];
+            }
+          }
+        }
+      }
 
-      // Ordenação final baseada na mensagem mais recente 
       conversations.sort((a, b) {
         final messagesA = a['messages'] as List<dynamic>? ?? [];
         final messagesB = b['messages'] as List<dynamic>? ?? [];
@@ -84,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  
   void _confirmDelete(String conversationId, String name, bool isGroup) {
     showDialog(
       context: context,
@@ -100,15 +157,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(ctx); 
+              Navigator.pop(ctx);
               try {
                 final chatService = Provider.of<ChatService>(context, listen: false);
-                
                 await chatService.deleteConversation(conversationId);
                 
                 if(mounted) {
                   _showSnackbar(context, 'Apagado com sucesso!', isError: false);
-                  _loadConversations(); 
+                  _loadConversations();
                 }
               } catch (e) {
                 if(mounted) {
@@ -126,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _createNewConversation(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
-    bool isGroup = false;
+    bool isGroup = true; 
     bool isPublic = true;
 
     showDialog(
@@ -134,14 +190,14 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Nova Conversa'),
+            title: const Text('Novo Grupo'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Nome da conversa',
+                    labelText: 'Nome do grupo',
                     hintText: 'Ex: Provas',
                     border: OutlineInputBorder(),
                   ),
@@ -150,32 +206,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(
                   children: [
                     Checkbox(
-                      value: isGroup,
+                      value: isPublic,
                       onChanged: (value) {
                         setDialogState(() {
-                          isGroup = value!;
+                          isPublic = value!;
                         });
                       },
                     ),
-                    const Text('Conversa em grupo'),
+                    const Text('Grupo público'),
                   ],
                 ),
-                if (isGroup) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isPublic,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            isPublic = value!;
-                          });
-                        },
-                      ),
-                      const Text('Grupo público'),
-                    ],
-                  ),
-                ],
               ],
             ),
             actions: [
@@ -188,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final name = nameController.text.trim();
                   
                   if (name.isEmpty) {
-                    _showSnackbar(context, 'Digite um nome para a conversa');
+                    _showSnackbar(context, 'Digite um nome para o grupo');
                     return;
                   }
 
@@ -208,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     Navigator.pop(context);
                     _loadConversations();
-                    _showSnackbar(context, 'Conversa criada com sucesso!', isError: false);
+                    _showSnackbar(context, 'Grupo criado com sucesso!', isError: false);
                   } catch (e) {
                     _showSnackbar(context, 'Erro: $e');
                   }
@@ -231,22 +271,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // 🚀 5. FUNÇÃO DE HORA CORRIGIDA
   String _formatTime(String? isoString) {
     if (isoString == null) return '';
     try {
-      final date = DateTime.parse(isoString);
+      final dateUtc = DateTime.parse(isoString);
+      // Converte a hora UTC para a hora local do dispositivo
+      final dateLocal = dateUtc.toLocal(); 
       final now = DateTime.now();
-      final difference = now.difference(date);
       
-      if (difference.inDays > 0) {
-        return '${date.day}/${date.month}/${date.year}';
-      } else if (difference.inHours > 0) {
-        return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-      } else if (difference.inMinutes > 0) {
-        return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      // Calcula a diferença em relação à data local
+      final difference = now.difference(dateLocal);
+      
+      if (now.day != dateLocal.day || difference.inDays > 0) {
+        // Se for outro dia, mostra a data
+        return '${dateLocal.day}/${dateLocal.month}/${dateLocal.year}';
       } else {
-        return 'Agora';
+        // Se for hoje, mostra a hora local
+        return '${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
       }
+      
     } catch (e) {
       return '';
     }
@@ -286,6 +330,8 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
+              // 🚀 6. CANCELA A ASSINATURA AO FAZER LOGOUT
+              _channel?.unsubscribe();
               final presenceService = Provider.of<PresenceService>(context, listen: false);
               presenceService.setUserOffline();
               Provider.of<AuthService>(context, listen: false).signOut();
@@ -335,7 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ElevatedButton.icon(
                     onPressed: () => _createNewConversation(context),
                     icon: const Icon(Icons.add),
-                    label: const Text('Criar Conversa'),
+                    label: const Text('Criar Grupo'),
                   ),
                 ],
               ),
@@ -344,13 +390,12 @@ class _HomeScreenState extends State<HomeScreen> {
           
           return RefreshIndicator(
             onRefresh: _loadConversations,
-            
             child: ListView.separated(
               itemCount: conversations.length,
               separatorBuilder: (context, index) => const Divider(
                 height: 1,
                 thickness: 0.5,
-                indent: 80, 
+                indent: 80,
                 endIndent: 16,
               ),
               itemBuilder: (ctx, i) {
@@ -368,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     radius: 28, 
                     backgroundColor: isGroup ? Colors.green : Colors.blue,
                     child: Text(
-                      name[0].toUpperCase(),
+                      name.isNotEmpty ? name[0].toUpperCase() : 'C',
                       style: const TextStyle(color: Colors.white, fontSize: 20),
                     ),
                   ),
@@ -396,21 +441,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
+                            // 🚀 USA A FUNÇÃO CORRIGIDA
                             _formatTime(messages.last['created_at']),
                             style: const TextStyle(color: Colors.grey, fontSize: 12),
                           ),
                         ],
                       )
                     : null,
-                  
                   onTap: () {
                     Navigator.pushNamed(
                       context, 
                       RoutesEnum.chat, 
-                      arguments: {'conversationId': id, 'conversationName': name} 
+                      arguments: {'conversationId': id, 'conversationName': name}
                     );
                   },
-                  
                   onLongPress: () {
                     _confirmDelete(id, name, isGroup);
                   },

@@ -1,3 +1,5 @@
+// lib/ui/features/search/search_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../services/search_service.dart';
@@ -63,6 +65,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  // 🚀 FUNÇÃO MODIFICADA
   Future<void> _startConversation(Map<String, dynamic> user) async {
     try {
       final chatService = Provider.of<ChatService>(context, listen: false);
@@ -74,21 +77,23 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
 
-      // Criar conversa individual
-      final conversationId = await chatService.createConversation(
-        user['full_name'] ?? 'Chat',
-        false, // não é grupo
-        false, // não é público
-        [currentUserId, user['id']],
-      );
-
+      // 🚀 USA A NOVA FUNÇÃO PARA ACHAR OU CRIAR
+      final otherUserId = user['id'];
+      final otherUserName = user['full_name'] ?? 'Chat';
       
+      final conversationId = await chatService.findOrCreateConversation(
+        otherUserId,
+        otherUserName,
+      );
+      
+      if (!context.mounted) return;
+
       Navigator.pushReplacementNamed(
         context, 
         '/chat',
-        arguments: {'conversationId': conversationId, 'conversationName': user['full_name'] ?? 'Chat'} // <-- Linha modificada
+        // 🚀 Passa o nome do OUTRO usuário, que é o nome correto para a conversa
+        arguments: {'conversationId': conversationId, 'conversationName': otherUserName}
       );
-      
 
       _showSnackbar('Conversa iniciada!', isError: false);
     } catch (e) {
@@ -108,7 +113,7 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
 
-      // Adicionar usuário ao grupo
+      // Adicionar usuário ao grupo (Esta lógica pode precisar ser melhorada no futuro)
       await chatService.createConversation(
         group['name'],
         true, // é grupo
@@ -116,13 +121,11 @@ class _SearchScreenState extends State<SearchScreen> {
         [currentUserId],
       );
 
-      
       Navigator.pushReplacementNamed(
         context, 
         '/chat',
-        arguments: {'conversationId': group['id'], 'conversationName': group['name'] ?? 'Grupo'} 
+        arguments: {'conversationId': group['id'], 'conversationName': group['name'] ?? 'Grupo'}
       );
-      
 
       _showSnackbar('Entrou no grupo!', isError: false);
     } catch (e) {

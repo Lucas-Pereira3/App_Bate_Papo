@@ -1,3 +1,5 @@
+// lib/services/chat_service.dart
+
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -221,12 +223,11 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  
   Future<void> addReaction(
     String messageId,
     String userId,
     String emoji,
-    String conversationId, 
+    String conversationId,
   ) async {
     try {
       print('😊 Adicionando reação: $emoji à mensagem: $messageId');
@@ -235,7 +236,7 @@ class ChatService extends ChangeNotifier {
         'p_message_id': messageId,
         'p_user_id': userId,
         'p_emoji': emoji,
-        'p_conversation_id': conversationId, 
+        'p_conversation_id': conversationId,
       });
 
       print('✅ Reação adicionada via função');
@@ -306,13 +307,38 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  // 🚀 NOVA FUNÇÃO (CHAMA A SQL)
+  Future<String> findOrCreateConversation(String otherUserId, String otherUserName) async {
+    try {
+      final currentUserId = _client.auth.currentUser!.id;
+      
+      print('🔍 Buscando ou criando chat 1-on-1 com: $otherUserName');
+
+      final data = await _client.rpc('find_or_create_conversation', params: {
+        'user_a_id': currentUserId,
+        'user_b_id': otherUserId,
+        'conv_name': otherUserName // O nome que eu (user_a) vejo para este chat
+      });
+      
+      final conversationId = data as String;
+      print('✅ Chat ID: $conversationId');
+      return conversationId;
+      
+    } catch (e) {
+      print('❌ Erro ao buscar ou criar conversa: $e');
+      rethrow;
+    }
+  }
+
+  // 🚀 FUNÇÃO MODIFICADA (SÓ PARA GRUPOS)
   Future<String> createConversation(
       String name, bool isGroup, bool isPublic, List<String> participantIds) async {
+    // Esta função agora é usada principalmente para criar GRUPOS
     try {
       final conversationId = _uuid.v4();
       final currentUserId = _client.auth.currentUser!.id;
 
-      print('🆕 Criando conversa: $name');
+      print('🆕 Criando conversa de GRUPO: $name');
       print('👥 Participantes: $participantIds');
 
       await _client.from('conversations').insert({
@@ -325,20 +351,25 @@ class ChatService extends ChangeNotifier {
       });
 
       for (final userId in participantIds) {
-        await _client.from('participants').insert({
-          'id': _uuid.v4(),
-          'conversation_id': conversationId,
-          'user_id': userId,
-          'joined_at': DateTime.now().toUtc().toIso8601String(),
-        });
+        // Se o usuário já não estiver na lista (no caso do criador)
+        if (participantIds.contains(userId)) {
+          await _client.from('participants').insert({
+            'id': _uuid.v4(),
+            'conversation_id': conversationId,
+            'user_id': userId,
+            'joined_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        }
       }
 
-      await sendTextMessage(
-          conversationId,
-          currentUserId,
-          isGroup
-              ? 'Grupo "$name" criado! 🎉'
-              : 'Conversa iniciada! 👋');
+      // 🚀 MENSAGEM INICIAL SÓ É ENVIADA PARA GRUPOS AQUI
+      if (isGroup) {
+        await sendTextMessage(
+            conversationId,
+            currentUserId,
+            'Grupo "$name" criado! 🎉'
+        );
+      }
 
       print('✅ Conversa criada com sucesso: $conversationId');
       return conversationId;
