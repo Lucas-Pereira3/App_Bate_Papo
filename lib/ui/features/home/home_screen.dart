@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/supabase_config.dart';
 import '../../../core/app_routes.dart';
 import '../../../services/auth_service.dart';
@@ -18,41 +19,57 @@ class _HomeScreenState extends State<HomeScreen> {
   final SupabaseClient _client = SupabaseConfig.client;
   late Future<List<dynamic>> _conversationsFuture;
   
-  // 🚀 1. CANAL DE TEMPO REAL
-  RealtimeChannel? _channel;
+  
+  RealtimeChannel? _messagesChannel;
+  
+  RealtimeChannel? _profilesChannel;
 
   @override
   void initState() {
     super.initState();
     _loadConversations();
     _setUserOnline();
-    _subscribeToChanges(); // 🚀 2. INICIA A ASSINATURA
+    _subscribeToMessages();
+    _subscribeToProfileChanges(); 
   }
   
-  // 🚀 3. FUNÇÃO PARA OUVIR MUDANÇAS
-  void _subscribeToChanges() {
-    _channel = _client
+  void _subscribeToMessages() {
+    
+    _messagesChannel = _client
         .channel('public:messages')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'messages',
-          // Filtra para ouvir apenas mensagens das conversas do usuário
-          // (Isso requer que o RLS esteja ATIVADO e configurado,
-          // mas se o RLS estiver desativado, ele ouvirá TUDO, o que também funciona)
           callback: (payload) {
             print('🔄 Nova mensagem detectada! Recarregando a home...');
-            // Recarrega a lista de conversas
-            _loadConversations();
+            if (mounted) _loadConversations();
+          },
+        )
+        .subscribe();
+  }
+
+  // função para ouvir mudanças de perfil
+  void _subscribeToProfileChanges() {
+    _profilesChannel = _client
+        .channel('public:profiles')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          callback: (payload) {
+            print('🔄 Perfil atualizado detectado! Recarregando conversas...');
+            
+            if (mounted) _loadConversations();
           },
         )
         .subscribe();
   }
   
-  // 🚀 4. CANCELA A ASSINATURA AO SAIR DA TELA
   @override
   void dispose() {
-    _channel?.unsubscribe();
+    _messagesChannel?.unsubscribe();
+    _profilesChannel?.unsubscribe(); 
     super.dispose();
   }
 
@@ -62,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadConversations() async {
-    // Apenas atualiza o estado se a tela ainda estiver "montada"
     if (mounted) {
       setState(() {
         _conversationsFuture = _fetchConversations();
@@ -88,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
               
               participants!inner(
                 user_id,
-                profile:profiles(full_name) 
+                profile:profiles(full_name, avatar_url) 
               ),
               
               messages(id, content, created_at, type, is_deleted)
@@ -113,8 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
           
           if (otherParticipant != null) {
             final profile = otherParticipant['profile'] as Map<String, dynamic>?;
-            if (profile != null && profile['full_name'] != null) {
-              conv['name'] = profile['full_name'];
+            if (profile != null) {
+              conv['name'] = profile['full_name'] ?? 'Chat';
+              conv['avatar_url'] = profile['avatar_url']; 
             }
           }
         }
@@ -269,23 +286,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🚀 5. FUNÇÃO DE HORA CORRIGIDA
   String _formatTime(String? isoString) {
     if (isoString == null) return '';
     try {
       final dateUtc = DateTime.parse(isoString);
-      // Converte a hora UTC para a hora local do dispositivo
       final dateLocal = dateUtc.toLocal(); 
       final now = DateTime.now();
       
-      // Calcula a diferença em relação à data local
       final difference = now.difference(dateLocal);
       
       if (now.day != dateLocal.day || difference.inDays > 0) {
-        // Se for outro dia, mostra a data
         return '${dateLocal.day}/${dateLocal.month}/${dateLocal.year}';
       } else {
-        // Se for hoje, mostra a hora local
         return '${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
       }
       
@@ -328,8 +340,10 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              // 🚀 6. CANCELA A ASSINATURA AO FAZER LOGOUT
-              _channel?.unsubscribe();
+              // 🚀 ATUALIZADO
+              _messagesChannel?.unsubscribe();
+              _profilesChannel?.unsubscribe();
+              
               final presenceService = Provider.of<PresenceService>(context, listen: false);
               presenceService.setUserOffline();
               Provider.of<AuthService>(context, listen: false).signOut();
@@ -402,6 +416,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 final id = conv['id'];
                 final isGroup = conv['is_group'] == true;
                 
+                final avatarUrl = conv['avatar_url'] as String?;
+                
                 final messages = conv['messages'] as List<dynamic>? ?? [];
                 final lastMessageText = _getLastMessageText(messages);
                 
@@ -410,10 +426,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(
                     radius: 28, 
                     backgroundColor: isGroup ? Colors.green : Colors.blue,
-                    child: Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : 'C',
-                      style: const TextStyle(color: Colors.white, fontSize: 20),
-                    ),
+                    backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                      ? CachedNetworkImageProvider(avatarUrl)
+                      : null,
+                    child: (avatarUrl == null || avatarUrl.isEmpty)
+                      ? Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : 'C',
+                          style: const TextStyle(color: Colors.white, fontSize: 20),
+                        )
+                      : null,
                   ),
                   title: Row(
                     children: [
@@ -439,7 +460,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            // 🚀 USA A FUNÇÃO CORRIGIDA
                             _formatTime(messages.last['created_at']),
                             style: const TextStyle(color: Colors.grey, fontSize: 12),
                           ),

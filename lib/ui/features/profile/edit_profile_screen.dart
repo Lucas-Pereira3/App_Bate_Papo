@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart'; 
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/profile_service.dart';
 import '../../../services/auth_service.dart';
 
@@ -19,6 +19,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Uint8List? _imageBytes;
   bool _isLoading = false;
   bool _isInitialized = false;
+  String? _currentAvatarUrl;
+
+  // Flag para marcar a remoção
+  bool _removeImageFlag = false;
 
   @override
   void initState() {
@@ -29,13 +33,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _loadCurrentProfile() async {
     try {
       final profileService = Provider.of<ProfileService>(context, listen: false);
-      final profile = await profileService.getCurrentProfile();
+      final profile = profileService.currentProfile;
       
       if (profile != null) {
         setState(() {
           _nameController.text = profile['full_name'] ?? '';
+          _currentAvatarUrl = profile['avatar_url']; 
           _isInitialized = true;
         });
+      } else {
+        await profileService.initializeProfile();
+        final newProfile = profileService.currentProfile;
+        if (newProfile != null) {
+           setState(() {
+             _nameController.text = newProfile['full_name'] ?? '';
+             _currentAvatarUrl = newProfile['avatar_url'];
+             _isInitialized = true;
+           });
+        }
       }
     } catch (e) {
       print('Erro ao carregar perfil: $e');
@@ -53,12 +68,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final bytes = await image.readAsBytes();
         setState(() {
           _imageBytes = bytes;
+          _removeImageFlag = false; // Se escolheu foto, não está removendo
         });
       }
     } catch (e) {
       print('Erro ao selecionar imagem: $e');
       _showSnackbar('Erro ao selecionar imagem');
     }
+  }
+
+  // Função para o botão de remover
+  void _removeImage() {
+    setState(() {
+      _imageBytes = null; 
+      _currentAvatarUrl = null; 
+      _removeImageFlag = true; 
+    });
   }
 
   Future<void> _saveProfile() async {
@@ -74,23 +99,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final profileService = Provider.of<ProfileService>(context, listen: false);
       
+      // Passa a flag de remoção
       await profileService.updateProfile(
         _nameController.text, 
-        _imageBytes
+        _imageBytes,
+        removeImage: _removeImageFlag,
       );
       
       _showSnackbar('Perfil atualizado com sucesso!', isError: false);
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       _showSnackbar('Erro ao salvar perfil: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   void _showSnackbar(String message, {bool isError = true}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -101,9 +131,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-    final user = auth.currentUser;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Editar Perfil'),
@@ -132,17 +159,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       children: [
                         CircleAvatar(
                           radius: 50,
-                          
                           backgroundImage: _imageBytes != null
                               ? MemoryImage(_imageBytes!)
-                              : (user?.userMetadata?['avatar_url'] != null
+                              : (_currentAvatarUrl != null && _currentAvatarUrl!.isNotEmpty
                                   ? CachedNetworkImageProvider(
-                                      user!.userMetadata!['avatar_url'] as String
+                                      _currentAvatarUrl! 
                                     )
                                   : null) as ImageProvider?,
-                          
-                          child: _imageBytes == null && user?.userMetadata?['avatar_url'] == null
-                              ? const Icon(Icons.person, size: 40, color: Colors.white)
+                          child: _imageBytes == null && (_currentAvatarUrl == null || _currentAvatarUrl!.isEmpty)
+                              ? const Icon(Icons.person, size: 40, color: Colors.white) 
                               : null,
                         ),
                         Positioned(
@@ -160,9 +185,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  
+                  // Botão de remover foto
+                  TextButton(
+                    onPressed: _removeImage,
+                    child: const Text(
+                      'Remover foto',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 12), 
+                  
                   TextFormField(
-                    initialValue: user?.email ?? '',
+                    initialValue: Provider.of<ProfileService>(context).currentProfile?['email'] ?? 
+                                  Provider.of<AuthService>(context).currentUser?.email ?? '',
                     decoration: InputDecoration(
                       labelText: 'Email',
                       border: const OutlineInputBorder(),

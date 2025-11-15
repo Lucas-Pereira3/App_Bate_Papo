@@ -45,6 +45,7 @@ class ChatService extends ChangeNotifier {
           type = payload?['type']?.toString() ?? 'text';
         }
 
+        // Lê o tipo da mensagem do banco
         if (map.containsKey('type') && map['type'] != null) {
           type = map['type'] as String;
         }
@@ -82,7 +83,7 @@ class ChatService extends ChangeNotifier {
           conversationId: map['conversation_id'] as String,
           senderId: map['sender_id'] as String,
           content: content,
-          type: type,
+          type: type, 
           createdAt: createdAt,
           reactions: reactions,
           isEdited: map['is_edited'] as bool? ?? false,
@@ -119,6 +120,7 @@ class ChatService extends ChangeNotifier {
             type = payload?['type']?.toString() ?? 'text';
           }
 
+          // Lê o tipo da mensagem do banco
           if (map.containsKey('type') && map['type'] != null) {
             type = map['type'] as String;
           }
@@ -163,7 +165,7 @@ class ChatService extends ChangeNotifier {
             conversationId: map['conversation_id'] as String,
             senderId: map['sender_id'] as String,
             content: content,
-            type: type,
+            type: type, 
             createdAt: createdAt,
             reactions: reactions,
             isEdited: map['is_edited'] as bool? ?? false,
@@ -218,7 +220,7 @@ class ChatService extends ChangeNotifier {
         'conversation_id': conversationId,
         'sender_id': senderId,
         'content': imageUrl,
-        'type': 'image',
+        'type': 'image', 
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
@@ -288,6 +290,7 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  // Usa "Soft Delete" 
   Future<void> deleteMessage(String messageId) async {
     try {
       print('🗑️ Marcando mensagem como excluída: $messageId');
@@ -296,7 +299,6 @@ class ChatService extends ChangeNotifier {
           .from('messages')
           .update({
             'is_deleted': true 
-            
           })
           .eq('id', messageId);
           
@@ -321,7 +323,6 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  
   Future<String> findOrCreateConversation(String otherUserId, String otherUserName) async {
     try {
       final currentUserId = _client.auth.currentUser!.id;
@@ -331,7 +332,7 @@ class ChatService extends ChangeNotifier {
       final data = await _client.rpc('find_or_create_conversation', params: {
         'user_a_id': currentUserId,
         'user_b_id': otherUserId,
-        'conv_name': otherUserName 
+        'conv_name': otherUserName
       });
       
       final conversationId = data as String;
@@ -344,10 +345,8 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  
   Future<String> createConversation(
       String name, bool isGroup, bool isPublic, List<String> participantIds) async {
-    // Esta função agora é usada principalmente para criar GRUPOS
     try {
       final conversationId = _uuid.v4();
       final currentUserId = _client.auth.currentUser!.id;
@@ -365,7 +364,6 @@ class ChatService extends ChangeNotifier {
       });
 
       for (final userId in participantIds) {
-        // Se o usuário já não estiver na lista (no caso do criador)
         if (participantIds.contains(userId)) {
           await _client.from('participants').insert({
             'id': _uuid.v4(),
@@ -376,7 +374,6 @@ class ChatService extends ChangeNotifier {
         }
       }
 
-      
       if (isGroup) {
         await sendTextMessage(
             conversationId,

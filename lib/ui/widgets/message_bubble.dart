@@ -1,6 +1,6 @@
-import 'dart:convert'; 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart'; 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:convert';
 import '../../models/message_model.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -8,6 +8,10 @@ class MessageBubble extends StatelessWidget {
   final bool isMine;
   final String currentUserId;
   final Function(MessageReaction)? onReactionTap;
+  
+  // Parâmetros para as fotos
+  final String? senderAvatarUrl;
+  final String? myAvatarUrl;
 
   const MessageBubble({
     super.key,
@@ -15,6 +19,8 @@ class MessageBubble extends StatelessWidget {
     required this.isMine,
     required this.currentUserId,
     this.onReactionTap,
+    this.senderAvatarUrl,
+    this.myAvatarUrl,
   });
 
   String _formatTime(DateTime date) {
@@ -50,12 +56,11 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    
+    // Usa CachedNetworkImage e trata fallback de Base64
     if (message.type == 'image') {
       Widget imageWidget;
 
       if (message.content.startsWith('data:image')) {
-        
         try {
           final base64String = message.content.split(',').last;
           final imageBytes = base64Decode(base64String);
@@ -69,7 +74,6 @@ class MessageBubble extends StatelessWidget {
           );
         }
       } else {
-        // --- MODO CORRETO (COM CACHE) ---
         imageWidget = CachedNetworkImage(
           imageUrl: message.content,
           fit: BoxFit.cover,
@@ -140,11 +144,9 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  //  FUNÇÃO _buildReactions 
   Widget _buildReactions() {
     if (message.reactions.isEmpty) return const SizedBox();
 
-    // Agrupar reações por emoji
     final reactionCounts = <String, int>{};
     for (final reaction in message.reactions) {
       reactionCounts[reaction.emoji] = (reactionCounts[reaction.emoji] ?? 0) + 1;
@@ -198,6 +200,26 @@ class MessageBubble extends StatelessWidget {
       ),
     );
   }
+  
+  // Widget helper para a foto de perfil
+  Widget _buildAvatar(String? avatarUrl, String fallbackText) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: Colors.grey.shade300,
+      backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+          ? CachedNetworkImageProvider(avatarUrl)
+          : null,
+      child: (avatarUrl == null || avatarUrl.isEmpty)
+          ? Text(
+              fallbackText,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: isMine ? 10 : 12,
+              ),
+            )
+          : null,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -206,15 +228,9 @@ class MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
+          // Avatar do Remetente
           if (!isMine) ...[
-            const CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.blue,
-              child: Text(
-                'U',
-                style: TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
+            _buildAvatar(senderAvatarUrl, 'U'), 
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -248,16 +264,10 @@ class MessageBubble extends StatelessWidget {
               ],
             ),
           ),
+          // Seu Avatar
           if (isMine) ...[
             const SizedBox(width: 8),
-            const CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.green,
-              child: Text(
-                'Eu',
-                style: TextStyle(color: Colors.white, fontSize: 10),
-              ),
-            ),
+            _buildAvatar(myAvatarUrl, 'Eu'), 
           ],
         ],
       ),

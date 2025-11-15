@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // 🚀 CORREÇÃO AQUI
 import '../../../services/chat_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/presence_service.dart';
@@ -34,8 +36,13 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isGroupChat = false;
   bool _isOtherUserOnline = false;
   StreamSubscription? _userStatusSubscription;
-  
   StreamSubscription? _reactionsSubscription;
+  
+  // Canal para ouvir mudanças de perfil
+  RealtimeChannel? _profilesChannel;
+
+  final Map<String, Map<String, dynamic>> _participantProfiles = {};
+  String? _myAvatarUrl;
 
   @override
   void didChangeDependencies() {
@@ -49,12 +56,16 @@ class _ChatScreenState extends State<ChatScreen> {
     _conversationId = args?['conversationId'] ?? '';
     _conversationName = args?['conversationName'] ?? 'Chat';
 
+    final profileService = Provider.of<ProfileService>(context, listen: false);
+    _myAvatarUrl = profileService.currentProfile?['avatar_url'];
+
     if (_conversationId.isNotEmpty) {
       await _loadParticipants();
       await _loadInitialMessages();
       _subscribeToMessages();
       _subscribeToTyping();
-      _subscribeToReactions(); 
+      _subscribeToReactions();
+      _subscribeToProfileChanges();
 
       if (!_isGroupChat && _otherUserId.isNotEmpty) {
         _subscribeToUserStatus();
@@ -70,21 +81,34 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final response = await client
           .from('participants')
-          .select('user_id')
+          .select('user_id, profile:profiles(id, full_name, avatar_url)')
           .eq('conversation_id', _conversationId);
 
-      final participants = (response as List<dynamic>)
-          .map((e) => e['user_id'] as String)
-          .toList();
+      final participantsData = response as List<dynamic>;
+      
+      if (mounted) {
+        setState(() {
+          _participantProfiles.clear();
+          for (final item in participantsData) {
+            final userId = item['user_id'] as String;
+            final profile = item['profile'] as Map<String, dynamic>?;
+            if (profile != null) {
+              _participantProfiles[userId] = profile;
+            }
+          }
+        });
+      }
 
-      if (participants.length > 2) {
+      final participantIds = participantsData.map((e) => e['user_id'] as String).toList();
+
+      if (participantIds.length > 2) {
         if (mounted) setState(() => _isGroupChat = true);
-      } else if (participants.length == 2) {
+      } else if (participantIds.length == 2) {
         if (mounted) {
           setState(() {
             _isGroupChat = false;
             _otherUserId =
-                participants.firstWhere((id) => id != myId, orElse: () => '');
+                participantIds.firstWhere((id) => id != myId, orElse: () => '');
           });
         }
       } else {
@@ -118,12 +142,9 @@ class _ChatScreenState extends State<ChatScreen> {
         .eq('conversation_id', _conversationId) 
         .listen(
       (data) {
-        // Alguém reagiu. Recarregamos a lista de mensagens.
         print('🔄 Reação mudou, recarregando mensagens...');
         
-        // Evita chamadas duplicadas se já estiver carregando
         if (!_isLoading && mounted) {
-          // Usamos a função que já busca mensagens E reações juntas!
           _loadInitialMessages();
         }
       },
@@ -132,6 +153,40 @@ class _ChatScreenState extends State<ChatScreen> {
       },
     );
   }
+
+  // Função para ouvir mudanças de perfil
+  void _subscribeToProfileChanges() {
+    _profilesChannel?.unsubscribe(); 
+    _profilesChannel = SupabaseConfig.client
+        .channel('public:profiles:chat')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          callback: (payload) {
+            final updatedProfileId = payload.newRecord['id'];
+            
+            // Verifica se o perfil atualizado é de alguém nesta conversa
+            if (updatedProfileId != null && _participantProfiles.containsKey(updatedProfileId)) {
+              print('🔄 Perfil de participante [$updatedProfileId] atualizado!');
+              
+              // Recarrega os dados dos participantes (para pegar a nova foto)
+              _loadParticipants();
+              
+              // Se for o MEU perfil, atualiza a foto localmente
+              if (updatedProfileId == SupabaseConfig.client.auth.currentUser?.id) {
+                 if (mounted) {
+                   setState(() {
+                     _myAvatarUrl = payload.newRecord['avatar_url'];
+                   });
+                 }
+              }
+            }
+          },
+        )
+        .subscribe();
+  }
+
 
   Future<void> _loadInitialMessages() async {
     try {
@@ -437,7 +492,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
                 await chatService.deleteMessage(message.id);
-                // A subscription de mensagens deve atualizar a lista
               } catch (e) {
                 print('❌ Erro ao excluir mensagem: $e');
                 _showErrorSnackbar('Erro ao excluir mensagem: $e');
@@ -541,6 +595,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _typingSubscription?.cancel();
     _userStatusSubscription?.cancel();
     _reactionsSubscription?.cancel(); 
+    _profilesChannel?.unsubscribe();
     _stopTyping();
     _textController.dispose();
     _scrollController.dispose();
@@ -552,22 +607,38 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
     final userId = auth.currentUser?.id ?? '';
 
+    final otherUserAvatar = _isGroupChat ? null : _participantProfiles[_otherUserId]?['avatar_url'];
+
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(_conversationName),
-            if (!_isGroupChat && _isOtherUserOnline && _typingUsers.isEmpty)
-              const Text(
-                'Online',
-                style: TextStyle(fontSize: 12, color: Colors.white70),
-              ),
-            if (_typingUsers.isNotEmpty)
-              Text(
-                '${_typingUsers.values.join(', ')} ${_typingUsers.length == 1 ? 'está' : 'estão'} digitando...',
-                style: const TextStyle(fontSize: 12, color: Colors.white70),
-              ),
+            CircleAvatar(
+              radius: 18,
+              backgroundImage: (otherUserAvatar != null && otherUserAvatar.isNotEmpty)
+                  ? CachedNetworkImageProvider(otherUserAvatar)
+                  : null,
+              child: (otherUserAvatar == null || otherUserAvatar.isEmpty)
+                  ? Text(_conversationName.isNotEmpty ? _conversationName[0] : 'C')
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_conversationName),
+                if (!_isGroupChat && _isOtherUserOnline && _typingUsers.isEmpty)
+                  const Text(
+                    'Online',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                if (_typingUsers.isNotEmpty)
+                  Text(
+                    '${_typingUsers.values.join(', ')} ${_typingUsers.length == 1 ? 'está' : 'estão'} digitando...',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+              ],
+            ),
           ],
         ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -615,6 +686,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         itemBuilder: (ctx, i) {
                           final message = _messages[i];
                           final isMine = message.senderId == userId;
+                          
+                          final senderAvatarUrl = _participantProfiles[message.senderId]?['avatar_url'];
 
                           return GestureDetector(
                             onLongPress: () => _showMessageOptions(message),
@@ -622,6 +695,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               message: message,
                               isMine: isMine,
                               currentUserId: userId,
+                              senderAvatarUrl: senderAvatarUrl,
+                              myAvatarUrl: _myAvatarUrl,
                               onReactionTap: (reaction) {
                                 _removeReaction(reaction);
                               },

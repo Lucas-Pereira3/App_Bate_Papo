@@ -26,8 +26,8 @@ class ProfileService extends ChangeNotifier {
           'id': userId,
           'full_name': _getNameFromEmail(email),
           'online': true,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
         
         _currentProfile = await getCurrentProfile();
@@ -35,6 +35,9 @@ class ProfileService extends ChangeNotifier {
       } else {
         print('✅ Perfil encontrado: ${_currentProfile!['full_name']}');
       }
+      
+      // Armazena o email no perfil local para consistência
+      _currentProfile?['email'] = email;
       
       notifyListeners();
       
@@ -57,6 +60,10 @@ class ProfileService extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       
+      // Adiciona o email ao perfil buscado
+      if (response != null) {
+        response['email'] = _client.auth.currentUser!.email;
+      }
       return response;
     } catch (e) {
       print('❌ Erro ao buscar perfil: $e');
@@ -68,25 +75,43 @@ class ProfileService extends ChangeNotifier {
     return await _storageService.uploadMessageImage(imageBytes, filename);
   }
 
-  Future<void> updateProfile(String fullName, Uint8List? imageBytes) async {
+  // Adiciona 'removeImage' flag
+  Future<void> updateProfile(
+    String fullName, 
+    Uint8List? imageBytes, {
+    bool removeImage = false, 
+  }) async {
     try {
       final userId = _client.auth.currentUser!.id;
-      String? avatarUrl;
+      
+      // Mapa com dados que SEMPRE serão atualizados
+      final Map<String, dynamic> dataToUpdate = {
+        'id': userId,
+        'full_name': fullName,
+        'online': true,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
 
       if (imageBytes != null) {
-        avatarUrl = await _storageService.uploadMessageImage(
+        // Caso 1: Usuário enviou uma NOVA foto
+        print('🔄 Enviando nova foto de perfil...');
+        final avatarUrl = await _storageService.uploadMessageImage(
           imageBytes, 
           'avatar_$userId.jpg'
         );
+        dataToUpdate['avatar_url'] = avatarUrl;
+        
+      } else if (removeImage) {
+        // Caso 2: Usuário clicou em "Remover Foto"
+        print('🗑️ Removendo foto de perfil...');
+        dataToUpdate['avatar_url'] = null; 
+      
       }
-
-      await _client.from('profiles').upsert({
-        'id': userId,
-        'full_name': fullName,
-        'avatar_url': avatarUrl,
-        'online': true,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      
+      await _client
+          .from('profiles')
+          .update(dataToUpdate)
+          .eq('id', userId);
 
       _currentProfile = await getCurrentProfile();
       notifyListeners();
