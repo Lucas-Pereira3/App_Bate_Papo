@@ -1,5 +1,3 @@
-// lib/services/chat_service.dart
-
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -45,6 +43,10 @@ class ChatService extends ChangeNotifier {
           final payload = map['payload'] as Map<String, dynamic>?;
           content = payload?['content']?.toString() ?? '';
           type = payload?['type']?.toString() ?? 'text';
+        }
+
+        if (map.containsKey('type') && map['type'] != null) {
+          type = map['type'] as String;
         }
 
         DateTime createdAt;
@@ -115,6 +117,10 @@ class ChatService extends ChangeNotifier {
             final payload = map['payload'] as Map<String, dynamic>?;
             content = payload?['content']?.toString() ?? '';
             type = payload?['type']?.toString() ?? 'text';
+          }
+
+          if (map.containsKey('type') && map['type'] != null) {
+            type = map['type'] as String;
           }
 
           DateTime createdAt;
@@ -284,10 +290,18 @@ class ChatService extends ChangeNotifier {
 
   Future<void> deleteMessage(String messageId) async {
     try {
-      print('🗑️ Excluindo mensagem: $messageId');
-      await _client.from('messages').delete().eq('id', messageId);
-      print('✅ Mensagem excluída com sucesso');
-      notifyListeners();
+      print('🗑️ Marcando mensagem como excluída: $messageId');
+      
+      await _client
+          .from('messages')
+          .update({
+            'is_deleted': true 
+            
+          })
+          .eq('id', messageId);
+          
+      print('✅ Mensagem marcada como excluída');
+      
     } catch (e) {
       print('❌ Erro ao excluir mensagem: $e');
       rethrow;
@@ -307,7 +321,7 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  // 🚀 NOVA FUNÇÃO (CHAMA A SQL)
+  
   Future<String> findOrCreateConversation(String otherUserId, String otherUserName) async {
     try {
       final currentUserId = _client.auth.currentUser!.id;
@@ -317,7 +331,7 @@ class ChatService extends ChangeNotifier {
       final data = await _client.rpc('find_or_create_conversation', params: {
         'user_a_id': currentUserId,
         'user_b_id': otherUserId,
-        'conv_name': otherUserName // O nome que eu (user_a) vejo para este chat
+        'conv_name': otherUserName 
       });
       
       final conversationId = data as String;
@@ -330,7 +344,7 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  // 🚀 FUNÇÃO MODIFICADA (SÓ PARA GRUPOS)
+  
   Future<String> createConversation(
       String name, bool isGroup, bool isPublic, List<String> participantIds) async {
     // Esta função agora é usada principalmente para criar GRUPOS
@@ -362,7 +376,7 @@ class ChatService extends ChangeNotifier {
         }
       }
 
-      // 🚀 MENSAGEM INICIAL SÓ É ENVIADA PARA GRUPOS AQUI
+      
       if (isGroup) {
         await sendTextMessage(
             conversationId,

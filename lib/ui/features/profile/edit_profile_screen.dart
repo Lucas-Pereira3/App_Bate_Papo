@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart'; 
 import '../../../services/profile_service.dart';
 import '../../../services/auth_service.dart';
 
@@ -131,11 +132,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       children: [
                         CircleAvatar(
                           radius: 50,
+                          
                           backgroundImage: _imageBytes != null
                               ? MemoryImage(_imageBytes!)
                               : (user?.userMetadata?['avatar_url'] != null
-                                  ? NetworkImage(user!.userMetadata!['avatar_url'] as String)
+                                  ? CachedNetworkImageProvider(
+                                      user!.userMetadata!['avatar_url'] as String
+                                    )
                                   : null) as ImageProvider?,
+                          
                           child: _imageBytes == null && user?.userMetadata?['avatar_url'] == null
                               ? const Icon(Icons.person, size: 40, color: Colors.white)
                               : null,

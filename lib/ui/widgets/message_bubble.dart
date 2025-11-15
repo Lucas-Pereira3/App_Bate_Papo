@@ -1,4 +1,6 @@
+import 'dart:convert'; 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart'; 
 import '../../models/message_model.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -48,57 +50,54 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    
     if (message.type == 'image') {
-      // ... (código da imagem) ...
-       return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Image.network(
-            message.content,
+      Widget imageWidget;
+
+      if (message.content.startsWith('data:image')) {
+        
+        try {
+          final base64String = message.content.split(',').last;
+          final imageBytes = base64Decode(base64String);
+          imageWidget = Image.memory(imageBytes, fit: BoxFit.cover);
+        } catch (e) {
+          imageWidget = Container(
             width: 200,
             height: 150,
-            fit: BoxFit.cover,
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
-                width: 200,
-                height: 150,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 200,
-                height: 150,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Imagem não carregada',
-                      style: TextStyle(
-                        color: isMine ? Colors.white : Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+            color: Colors.grey[300],
+            child: const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+          );
+        }
+      } else {
+        // --- MODO CORRETO (COM CACHE) ---
+        imageWidget = CachedNetworkImage(
+          imageUrl: message.content,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            width: 200,
+            height: 150,
+            color: Colors.grey[300],
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+          errorWidget: (context, url, error) => Container(
+            width: 200,
+            height: 150,
+            color: Colors.grey[300],
+            child: const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+          ),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 200,
+            height: 150,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: imageWidget,
+            ),
           ),
           if (message.isEdited)
             Padding(
@@ -141,7 +140,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  // 📍 FUNÇÃO _buildReactions 
+  //  FUNÇÃO _buildReactions 
   Widget _buildReactions() {
     if (message.reactions.isEmpty) return const SizedBox();
 
