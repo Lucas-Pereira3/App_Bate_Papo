@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // 🚀 CORREÇÃO AQUI
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import '../../../services/chat_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/presence_service.dart';
