@@ -25,7 +25,6 @@ class ProfileService extends ChangeNotifier {
         await _client.from('profiles').insert({
           'id': userId,
           'full_name': _getNameFromEmail(email),
-          'online': true,
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
@@ -36,7 +35,6 @@ class ProfileService extends ChangeNotifier {
         print('✅ Perfil encontrado: ${_currentProfile!['full_name']}');
       }
       
-      // Armazena o email no perfil local para consistência
       _currentProfile?['email'] = email;
       
       notifyListeners();
@@ -60,7 +58,6 @@ class ProfileService extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       
-      // Adiciona o email ao perfil buscado
       if (response != null) {
         response['email'] = _client.auth.currentUser!.email;
       }
@@ -75,7 +72,6 @@ class ProfileService extends ChangeNotifier {
     return await _storageService.uploadMessageImage(imageBytes, filename);
   }
 
-  // Adiciona 'removeImage' flag
   Future<void> updateProfile(
     String fullName, 
     Uint8List? imageBytes, {
@@ -84,16 +80,13 @@ class ProfileService extends ChangeNotifier {
     try {
       final userId = _client.auth.currentUser!.id;
       
-      // Mapa com dados que SEMPRE serão atualizados
       final Map<String, dynamic> dataToUpdate = {
         'id': userId,
         'full_name': fullName,
-        'online': true,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       if (imageBytes != null) {
-        // Caso 1: Usuário enviou uma NOVA foto
         print('🔄 Enviando nova foto de perfil...');
         final avatarUrl = await _storageService.uploadMessageImage(
           imageBytes, 
@@ -102,7 +95,6 @@ class ProfileService extends ChangeNotifier {
         dataToUpdate['avatar_url'] = avatarUrl;
         
       } else if (removeImage) {
-        // Caso 2: Usuário clicou em "Remover Foto"
         print('🗑️ Removendo foto de perfil...');
         dataToUpdate['avatar_url'] = null; 
       
@@ -123,17 +115,4 @@ class ProfileService extends ChangeNotifier {
     }
   }
 
-  Future<void> setUserOnline(bool online) async {
-    try {
-      final userId = _client.auth.currentUser!.id;
-      await _client.from('profiles').upsert({
-        'id': userId,
-        'online': online,
-        'last_seen': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      print('❌ Erro ao atualizar status online: $e');
-    }
-  }
 }

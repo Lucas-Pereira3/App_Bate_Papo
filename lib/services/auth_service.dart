@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
 import 'profile_service.dart';
+import 'presence_service.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _client = SupabaseConfig.client;
@@ -18,6 +19,9 @@ class AuthService extends ChangeNotifier {
       if (res.session != null) {
         final profileService = ProfileService();
         await profileService.initializeProfile();
+        
+        final presenceService = PresenceService();
+        await presenceService.setUserOnline();
       }
       
       notifyListeners();
@@ -47,8 +51,8 @@ class AuthService extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
-      final profileService = ProfileService();
-      await profileService.setUserOnline(false);
+      final presenceService = PresenceService();
+      await presenceService.setUserOffline();
       
       await _client.auth.signOut();
       notifyListeners();

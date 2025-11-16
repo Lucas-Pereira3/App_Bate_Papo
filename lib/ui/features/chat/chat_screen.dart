@@ -633,9 +633,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                 if (_typingUsers.isNotEmpty)
-                  Text(
-                    '${_typingUsers.values.join(', ')} ${_typingUsers.length == 1 ? 'está' : 'estão'} digitando...',
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  const Text(
+                    'digitando...', 
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
               ],
             ),

@@ -7,6 +7,7 @@ class CustomInput extends StatelessWidget {
   final bool obscure;
   final TextInputType keyboardType;
   final bool enabled;
+  final Widget? suffixIcon; 
 
   const CustomInput({
     super.key,
@@ -16,33 +17,30 @@ class CustomInput extends StatelessWidget {
     this.obscure = false,
     this.keyboardType = TextInputType.text,
     this.enabled = true,
+    this.suffixIcon, 
   });
 
   @override
   Widget build(BuildContext context) {
-    // Removemos a Coluna e o Text(label) separados
     return TextField(
       controller: controller,
       obscureText: obscure,
       enabled: enabled,
       keyboardType: keyboardType,
       decoration: InputDecoration(
-        // Usamos o label como rótulo flutuante
         labelText: label,
         hintText: hint,
-        
-        // Estilo moderno
         filled: true,
-        fillColor: Colors.grey[100], // Fundo cinza claro
+        fillColor: Colors.grey[100], 
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.0), // Cantos arredondados
-          borderSide: BorderSide.none, // Sem borda padrão
+          borderRadius: BorderRadius.circular(12.0), 
+          borderSide: BorderSide.none, 
         ),
-        enabledBorder: OutlineInputBorder( // Borda quando não focado
+        enabledBorder: OutlineInputBorder( 
           borderRadius: BorderRadius.circular(12.0),
           borderSide: BorderSide.none,
         ),
-        focusedBorder: OutlineInputBorder( // Borda quando focado
+        focusedBorder: OutlineInputBorder( 
           borderRadius: BorderRadius.circular(12.0),
           borderSide: const BorderSide(
             color: Color(0xFF424242),
@@ -50,6 +48,8 @@ class CustomInput extends StatelessWidget {
           ),
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+        
+        suffixIcon: suffixIcon, 
       ),
     );
   }

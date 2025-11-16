@@ -10,22 +10,30 @@ class PresenceService extends ChangeNotifier {
   Map<String, bool> get typingUsers => _typingUsers;
   Map<String, bool> get onlineUsers => _onlineUsers;
 
-  void setUserOnline() {
-    final userId = _client.auth.currentUser!.id;
-    _client.from('user_status').upsert({
-      'user_id': userId,
-      'online': true,
-      'last_seen': DateTime.now().toIso8601String(),
-    });
+  Future<void> setUserOnline() async {
+    try {
+      final userId = _client.auth.currentUser!.id;
+      await _client.from('user_status').upsert({
+        'user_id': userId,
+        'online': true,
+        'last_seen': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('❌ Erro no setUserOnline: $e');
+    }
   }
 
-  void setUserOffline() {
-    final userId = _client.auth.currentUser!.id;
-    _client.from('user_status').upsert({
-      'user_id': userId,
-      'online': false,
-      'last_seen': DateTime.now().toIso8601String(),
-    });
+  Future<void> setUserOffline() async {
+    try {
+      final userId = _client.auth.currentUser!.id;
+      await _client.from('user_status').upsert({
+        'user_id': userId,
+        'online': false,
+        'last_seen': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('❌ Erro no setUserOffline: $e');
+    }
   }
 
   Stream<Map<String, dynamic>> subscribeToUserStatus(String userId) {
@@ -42,26 +50,33 @@ class PresenceService extends ChangeNotifier {
   }
 
   
-  void startTyping(String conversationId, String userName) {
-    final userId = _client.auth.currentUser!.id;
-    _client.from('typing_indicators').upsert({
-      'user_id': userId,
-      'conversation_id': conversationId,
-      'user_name': userName, 
-      'typing': true,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
+  Future<void> startTyping(String conversationId, String userName) async {
+    try {
+      final userId = _client.auth.currentUser!.id;
+      await _client.from('typing_indicators').upsert({
+        'user_id': userId,
+        'conversation_id': conversationId,
+        'user_name': userName, 
+        'typing': true,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('❌ Erro no startTyping: $e');
+    }
   }
   
-
-  void stopTyping(String conversationId) {
-    final userId = _client.auth.currentUser!.id;
-    _client.from('typing_indicators').upsert({
-      'user_id': userId,
-      'conversation_id': conversationId,
-      'typing': false,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
+  Future<void> stopTyping(String conversationId) async {
+    try {
+      final userId = _client.auth.currentUser!.id;
+      await _client.from('typing_indicators').upsert({
+        'user_id': userId,
+        'conversation_id': conversationId,
+        'typing': false,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('❌ Erro no stopTyping: $e');
+    }
   }
 
   Stream<List<Map<String, dynamic>>> subscribeToTyping(String conversationId) {
