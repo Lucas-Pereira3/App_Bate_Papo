@@ -451,22 +451,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
+      backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
-        title: const Text('Ratozap'),
-        backgroundColor: Theme.of(context).primaryColor,
+        title: const Text('Ratozap', style: TextStyle(color: Color (0xFFFF6F4F)),),
+        backgroundColor: const Color(0xFF0D0D0D),
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
+            icon: const Icon(Icons.search, color: Color(0xFFFF6F4F)),
             onPressed: () => Navigator.pushNamed(context, '/search'),
           ),
           IconButton(
-            icon: const Icon(Icons.person),
+            icon: const Icon(Icons.person, color: Color(0xFFFF6F4F)),
             onPressed: () => Navigator.pushNamed(context, '/edit-profile'),
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Color(0xFFFF6F4F)),
             onPressed: () {
               _isDisposed = true;
               _messagesChannel?.unsubscribe();
@@ -556,7 +557,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   leading: CircleAvatar(
                     radius: 28, 
-                    backgroundColor: isGroup ? Colors.green : Colors.blue,
+                    backgroundColor: isGroup ? const Color(0xFF2E7D32) : Colors.blue,
                     backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
                       ? CachedNetworkImageProvider(avatarUrl)
                       : null,
@@ -571,7 +572,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
                       ),
                       if (isGroup) ...[
                         const SizedBox(width: 4),
@@ -583,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     lastMessageText,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    style: const TextStyle(fontSize: 14, color: Colors.white),
                   ),
                   trailing: messages.isNotEmpty 
                     ? Column(
@@ -602,7 +603,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               backgroundColor: Colors.green,
                               child: Text(
                                 unreadCount.toString(),
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
                               ),
                             ),
                           ]
@@ -639,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.green,
+        backgroundColor: const Color(0xFF2E7D32),
         child: const Icon(Icons.message, color: Colors.white),
         onPressed: () => _createNewConversation(context),
       ),

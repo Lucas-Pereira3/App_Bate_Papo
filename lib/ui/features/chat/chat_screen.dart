@@ -635,7 +635,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final otherUserAvatar = _isGroupChat ? null : _participantProfiles[_otherUserId]?['avatar_url'];
 
     return Scaffold(
+
+       // 🔥 Fundo principal do chat
+      backgroundColor: const Color(0xFF0D0D0D),
+
       appBar: AppBar(
+        iconTheme: const IconThemeData(
+        color: Color(0xFFFF6F4F), // força o botão de voltar para branco
+        ),
         title: Row(
           children: [
             CircleAvatar(
@@ -651,26 +658,27 @@ class _ChatScreenState extends State<ChatScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_conversationName),
+                Text(_conversationName , style: const TextStyle( color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
                 if (!_isGroupChat && _isOtherUserOnline && _typingUsers.isEmpty)
                   const Text(
                     'Online',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                    style: TextStyle(fontSize: 12, color: Color(0xFFFF6F4F)),
                   ),
                 if (_typingUsers.isNotEmpty)
                   const Text(
                     'digitando...',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                    style: TextStyle(fontSize: 12, color: Color(0xFFFF6F4F)),
                   ),
               ],
             ),
           ],
         ),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: const Color(0xFF121212),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _forceRefreshMessages,
+            color : const Color(0xFFFF6F4F),
           ),
         ],
       ),
@@ -733,7 +741,7 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             child: Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
+                color: const Color (0xFF1A1A1A),
                 border: Border(top: BorderSide(color: Colors.grey.shade300)),
               ),
               child: Padding(
@@ -742,16 +750,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     IconButton(
                       onPressed: _pickAndSendImage,
-                      icon: const Icon(Icons.photo_library, color: Colors.blue),
+                      icon: const Icon(Icons.photo_library, color: Color(0xFFFF6F4F)),
                     ),
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: const Color (0xFF1A1A1A),
                           borderRadius: BorderRadius.circular(24),
                         ),
                         child: TextField(
                           controller: _textController,
+                          style: const TextStyle(
+                          color: Colors.white, // cor do texto que você digita
+                          fontSize: 16,        // opcional: tamanho do texto
+                        ),
                           decoration: const InputDecoration(
                             hintText: 'Digite uma mensagem...',
                             border: InputBorder.none,
@@ -776,7 +788,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       icon: Icon(Icons.send,
                           color: _textController.text.trim().isEmpty
                               ? Colors.grey
-                              : Colors.blue),
+                              : const Color(0xFFFF6F4F)),
                     ),
                   ],
                 ),

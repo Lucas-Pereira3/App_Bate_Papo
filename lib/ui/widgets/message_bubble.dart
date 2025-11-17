@@ -125,7 +125,7 @@ class MessageBubble extends StatelessWidget {
         Text(
           message.content,
           style: TextStyle(
-            color: isMine ? Colors.white : Colors.black,
+            color: isMine ? Colors.white : Colors.white70,
           ),
         ),
         if (message.isEdited)
@@ -242,8 +242,8 @@ class MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: isMine
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade200,
+                        ? const Color(0xFF9B5CFF)   // bolha enviada
+                        : const Color(0xFF2A2A2A),  // bolha recebida
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: _buildMessageContent(),
@@ -256,7 +256,7 @@ class MessageBubble extends StatelessWidget {
                   child: Text(
                     _formatTime(message.createdAt),
                     style: const TextStyle(
-                      color: Colors.grey,
+                      color: Colors.white,
                       fontSize: 10,
                     ),
                   ),
