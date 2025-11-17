@@ -406,13 +406,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     showModalBottomSheet(
       context: context,
+      backgroundColor: const Color(0xFF0D0D0D),
       builder: (context) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (canEdit && message.type == 'text' && !message.isDeleted)
             ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Editar mensagem'),
+              leading: const Icon(Icons.edit, color:  Color(0xFFFFFF00)),
+              title: const Text('Editar mensagem', style: TextStyle(color : Colors.white70)),
               onTap: () {
                 Navigator.pop(context);
                 _editMessage(message);
@@ -420,17 +421,17 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           if (isMyMessage)
             ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
+              leading: const Icon(Icons.delete, color: Color(0xFFFF073A)),
               title: const Text('Excluir mensagem',
-                  style: TextStyle(color: Colors.red)),
+                  style: TextStyle(color: Colors.white70)),
               onTap: () {
                 Navigator.pop(context);
                 _deleteMessage(message);
               },
             ),
           ListTile(
-            leading: const Icon(Icons.emoji_emotions),
-            title: const Text('Adicionar reação'),
+            leading: const Icon(Icons.emoji_emotions, color:Color(0xFF00BFFF)),
+            title: const Text('Adicionar reação', style: TextStyle(color: Colors.white70)),
             onTap: () {
               Navigator.pop(context);
               _showReactionPicker(message);
@@ -438,7 +439,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.close),
-            title: const Text('Cancelar'),
+            title: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
             onTap: () => Navigator.pop(context),
           ),
         ],
@@ -453,19 +454,26 @@ class _ChatScreenState extends State<ChatScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Editar mensagem'),
+        title: const Text('Editar mensagem', style: TextStyle(color: Colors.white)),
+        backgroundColor:  const Color(0xFF0D0D0D),
+        constraints: const BoxConstraints(maxWidth: 300),
         content: TextField(
           controller: editController,
+          minLines: 1,
           maxLines: 3,
+           style: const TextStyle(
+            color: Colors.white70, 
+          ),
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
             hintText: 'Digite a nova mensagem...',
+            hintStyle: TextStyle(color: Colors.white70),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -484,7 +492,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
               }
             },
-            child: const Text('Salvar'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
+            child: const Text('Salvar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -495,13 +504,14 @@ class _ChatScreenState extends State<ChatScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Excluir mensagem'),
+        backgroundColor: const Color(0xFF0D0D0D),
+        title: const Text('Excluir mensagem', style : TextStyle(color: Colors.white)),
         content: const Text(
-            'Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.'),
+            'Tem certeza que deseja excluir esta mensagem? Esta ação não pode ser desfeita.', style : TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style : TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -518,8 +528,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 _loadInitialMessages();
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Excluir'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color (0xFFFF6F4F)),
+            child: const Text('Excluir',style : TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -532,7 +542,8 @@ class _ChatScreenState extends State<ChatScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Adicionar reação'),
+        title: const Text('Adicionar reação',style: TextStyle(color: Colors.white70)),
+        backgroundColor: const Color(0xFF0D0D0D),
         content: Wrap(
           spacing: 8,
           children: emojis
@@ -564,7 +575,7 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
           ),
         ],
       ),
@@ -575,13 +586,14 @@ class _ChatScreenState extends State<ChatScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remover Reação'),
+        backgroundColor: const Color(0xFF0D0D0D),
+        title: const Text('Remover Reação', style: TextStyle(color: Colors.white70)),
         content: Text(
-            'Tem certeza que deseja remover sua reação "${reaction.emoji}"?'),
+            'Tem certeza que deseja remover sua reação "${reaction.emoji}"?', style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -597,8 +609,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 _showErrorSnackbar('Erro ao remover reação: $e');
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Remover'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F4F)),
+            child: const Text('Remover', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

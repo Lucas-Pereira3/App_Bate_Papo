@@ -339,15 +339,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Novo Grupo'),
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text('Novo Grupo', style: TextStyle(color: Colors.white70),),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
+                  style: const TextStyle(
+                  color: Colors.white70, 
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Nome do grupo',
                     hintText: 'Ex: Provas',
+                    hintStyle: TextStyle(color: Colors.white70),
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -356,13 +361,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     Checkbox(
                       value: isPublic,
+                      activeColor: const Color(0xFFFF6F4F),   
+                      checkColor: Colors.black, 
                       onChanged: (value) {
                         setDialogState(() {
                           isPublic = value!;
                         });
                       },
                     ),
-                    const Text('Grupo público'),
+                    const Text('Grupo público',style: TextStyle(color: Colors.white70),),
                   ],
                 ),
               ],
@@ -400,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _showSnackbar(context, 'Erro: $e');
                   }
                 },
-                child: const Text('Criar'),
+                child: const Text('Criar',style: TextStyle(color: Colors.white70)),
               ),
             ],
           );

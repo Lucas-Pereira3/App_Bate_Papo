@@ -168,8 +168,11 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
-        title: const Text('Buscar'),
+        title: const Text('Buscar',style: TextStyle(color: Color(0xFFFF6F4F)),),
+        backgroundColor: const Color(0xFF1A1A1A),
+        foregroundColor: const Color(0xFFFF6F4F),
       ),
       body: Column(
         children: [
@@ -179,9 +182,13 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 TextField(
                   controller: _searchController,
+                  style: const TextStyle(
+                  color: Colors.white70, 
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Digite para buscar...',
-                    prefixIcon: const Icon(Icons.search),
+                    hintStyle: const TextStyle(color: Colors.white70),
+                    prefixIcon: const Icon(Icons.search, color: Colors.white70),
                     border: const OutlineInputBorder(),
                     suffixIcon: _isLoading
                         ? const SizedBox(
@@ -246,7 +253,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           _searchController.text.isEmpty
                               ? 'Digite para buscar'
                               : 'Nenhum resultado encontrado',
-                          style: const TextStyle(color: Colors.grey),
+                          style: const TextStyle(color: Colors.white70),
                         ),
                       ],
                     ),
