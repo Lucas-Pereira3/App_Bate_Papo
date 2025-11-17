@@ -63,7 +63,6 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  // 🚀 FUNÇÃO MODIFICADA
   Future<void> _startConversation(Map<String, dynamic> user) async {
     try {
       final chatService = Provider.of<ChatService>(context, listen: false);
@@ -75,7 +74,6 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
 
-      // 🚀 USA A NOVA FUNÇÃO PARA ACHAR OU CRIAR
       final otherUserId = user['id'];
       final otherUserName = user['full_name'] ?? 'Chat';
       
@@ -89,7 +87,6 @@ class _SearchScreenState extends State<SearchScreen> {
       Navigator.pushReplacementNamed(
         context, 
         '/chat',
-        // 🚀 Passa o nome do OUTRO usuário, que é o nome correto para a conversa
         arguments: {'conversationId': conversationId, 'conversationName': otherUserName}
       );
 
@@ -111,18 +108,19 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
 
-      // Adicionar usuário ao grupo (Esta lógica pode precisar ser melhorada no futuro)
-      await chatService.createConversation(
-        group['name'],
-        true, // é grupo
-        group['is_public'] ?? true,
-        [currentUserId],
-      );
+      // 1. Pega o ID do grupo existente
+      final String groupId = group['id'];
+      final String groupName = group['name'] ?? 'Grupo';
 
+      // 2. Chama a nova função 'joinGroup'
+      await chatService.joinGroup(groupId, currentUserId);
+
+      // 3. Navega para o grupo existente
+      if (!context.mounted) return;
       Navigator.pushReplacementNamed(
         context, 
         '/chat',
-        arguments: {'conversationId': group['id'], 'conversationName': group['name'] ?? 'Grupo'}
+        arguments: {'conversationId': groupId, 'conversationName': groupName}
       );
 
       _showSnackbar('Entrou no grupo!', isError: false);

@@ -435,6 +435,43 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+
+  Future<void> joinGroup(String conversationId, String userId) async {
+    try {
+      print('🤝 Verificando se $userId está no grupo $conversationId');
+
+      //  Verifica se já existe
+      final existing = await _client
+          .from('participants')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existing != null) {
+        print('ℹ️ Usuário já está no grupo.');
+        return; 
+      }
+
+      // 2. Se não existe, insere
+      print('➕ Adicionando usuário ao grupo...');
+      await _client.from('participants').insert({
+        'id': _uuid.v4(),
+        'conversation_id': conversationId,
+        'user_id': userId,
+        'joined_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      
+      print('✅ Usuário adicionado ao grupo.');
+      notifyListeners(); // Notifica a home screen para recarregar
+      
+    } catch (e) {
+      print('❌ Erro ao entrar no grupo: $e');
+      rethrow;
+    }
+  }
+
+
   void refreshMessages() {
     print('🔄 Forçando atualização das mensagens...');
     notifyListeners();

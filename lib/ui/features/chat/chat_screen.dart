@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/presence_service.dart';
@@ -38,7 +38,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isOtherUserOnline = false;
   StreamSubscription? _userStatusSubscription;
   StreamSubscription? _reactionsSubscription;
-  
+
   RealtimeChannel? _profilesChannel;
 
   final Map<String, Map<String, dynamic>> _participantProfiles = {};
@@ -50,14 +50,16 @@ class _ChatScreenState extends State<ChatScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _initializeChat();
-    
+
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
     final conversationId = args?['conversationId'] ?? '';
-    
+
     if (conversationId.isNotEmpty) {
-      Provider.of<AppStateService>(context, listen: false).setCurrentChat(conversationId);
-      Provider.of<ChatService>(context, listen: false).markConversationAsRead(conversationId);
+      Provider.of<AppStateService>(context, listen: false)
+          .setCurrentChat(conversationId);
+      Provider.of<ChatService>(context, listen: false)
+          .markConversationAsRead(conversationId);
     }
   }
 
@@ -96,7 +98,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .eq('conversation_id', _conversationId);
 
       final participantsData = response as List<dynamic>;
-      
+
       if (!_isDisposed && mounted) {
         setState(() {
           _participantProfiles.clear();
@@ -110,7 +112,8 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
 
-      final participantIds = participantsData.map((e) => e['user_id'] as String).toList();
+      final participantIds =
+          participantsData.map((e) => e['user_id'] as String).toList();
 
       if (participantIds.length > 2) {
         if (!_isDisposed && mounted) setState(() => _isGroupChat = true);
@@ -135,7 +138,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _userStatusSubscription?.cancel();
     _userStatusSubscription =
         presenceService.subscribeToUserStatus(_otherUserId).listen((status) {
-
       if (!_isDisposed && mounted) {
         setState(() {
           _isOtherUserOnline = status['online'] ?? false;
@@ -151,23 +153,23 @@ class _ChatScreenState extends State<ChatScreen> {
     _reactionsSubscription = client
         .from('message_reactions')
         .stream(primaryKey: ['id'])
-        .eq('conversation_id', _conversationId) 
+        .eq('conversation_id', _conversationId)
         .listen(
-      (data) {
-        print('🔄 Reação mudou, recarregando mensagens...');
-        
-        if (!_isLoading && !_isDisposed && mounted) {
-          _loadInitialMessages();
-        }
-      },
-      onError: (error) {
-        print('❌ Erro na subscription de reações: $error');
-      },
-    );
+          (data) {
+            print('🔄 Reação mudou, recarregando mensagens...');
+
+            if (!_isLoading && !_isDisposed && mounted) {
+              _loadInitialMessages();
+            }
+          },
+          onError: (error) {
+            print('❌ Erro na subscription de reações: $error');
+          },
+        );
   }
 
   void _subscribeToProfileChanges() {
-    _profilesChannel?.unsubscribe(); 
+    _profilesChannel?.unsubscribe();
     _profilesChannel = SupabaseConfig.client
         .channel('public:profiles:chat')
         .onPostgresChanges(
@@ -176,19 +178,20 @@ class _ChatScreenState extends State<ChatScreen> {
           table: 'profiles',
           callback: (payload) {
             final updatedProfileId = payload.newRecord['id'];
-            
-            if (updatedProfileId != null && _participantProfiles.containsKey(updatedProfileId)) {
+
+            if (updatedProfileId != null &&
+                _participantProfiles.containsKey(updatedProfileId)) {
               print('🔄 Perfil de participante [$updatedProfileId] atualizado!');
-              
+
               _loadParticipants();
-              
-              if (updatedProfileId == SupabaseConfig.client.auth.currentUser?.id) {
-                 
-                  if (!_isDisposed && mounted) {
-                    setState(() {
-                      _myAvatarUrl = payload.newRecord['avatar_url'];
-                    });
-                  }
+
+              if (updatedProfileId ==
+                  SupabaseConfig.client.auth.currentUser?.id) {
+                if (!_isDisposed && mounted) {
+                  setState(() {
+                    _myAvatarUrl = payload.newRecord['avatar_url'];
+                  });
+                }
               }
             }
           },
@@ -201,7 +204,6 @@ class _ChatScreenState extends State<ChatScreen> {
       final chatService = Provider.of<ChatService>(context, listen: false);
       final messages = await chatService.fetchMessages(_conversationId);
 
-      
       if (!_isDisposed && mounted) {
         setState(() {
           _messages = messages;
@@ -212,7 +214,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
     } catch (e) {
       print('❌ Erro ao carregar mensagens: $e');
-      
+
       if (!_isDisposed && mounted) {
         _showErrorSnackbar('Erro ao carregar mensagens');
         setState(() {
@@ -229,17 +231,19 @@ class _ChatScreenState extends State<ChatScreen> {
     _messagesSubscription = chatService.subscribeMessages(_conversationId).listen(
       (newMessages) {
         print('🔄 Subscription de mensagens: ${newMessages.length} mensagens');
-        
+
         if (!_isDisposed && mounted) {
           setState(() {
             _messages = newMessages;
           });
+          
+          chatService.markConversationAsRead(_conversationId);
         }
         _scrollToBottom();
       },
       onError: (error) {
         print('❌ Erro na subscription de mensagens: $error');
-        
+
         if (!_isDisposed && mounted) {
           _showErrorSnackbar('Erro na conexão em tempo real');
         }
@@ -275,7 +279,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _isTyping = true;
       final presenceService =
           Provider.of<PresenceService>(context, listen: false);
-      final profileService = Provider.of<ProfileService>(context, listen: false);
+      final profileService =
+          Provider.of<ProfileService>(context, listen: false);
       final myName = profileService.currentProfile?['full_name'] ?? 'Usuário';
       presenceService.startTyping(_conversationId, myName);
     }
@@ -303,8 +308,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showErrorSnackbar(String message) {
-    
-    if (!mounted) return; 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -315,8 +319,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showSuccessSnackbar(String message) {
-  
-    if (!mounted) return; 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -359,8 +362,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (image != null) {
         final bytes = await image.readAsBytes();
-        
-        if (!mounted) return; 
+
+        if (!mounted) return;
 
         final chatService = Provider.of<ChatService>(context, listen: false);
         final auth = Provider.of<AuthService>(context, listen: false);
@@ -382,7 +385,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _removeMessageLocally(String messageId) {
-    
     if (!_isDisposed && mounted) {
       setState(() {
         _messages.removeWhere((message) => message.id == messageId);
@@ -419,8 +421,8 @@ class _ChatScreenState extends State<ChatScreen> {
           if (isMyMessage)
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
-              title:
-                  const Text('Excluir mensagem', style: TextStyle(color: Colors.red)),
+              title: const Text('Excluir mensagem',
+                  style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(context);
                 _deleteMessage(message);
@@ -470,7 +472,6 @@ class _ChatScreenState extends State<ChatScreen> {
               final newContent = editController.text.trim();
               if (newContent.isNotEmpty && newContent != message.content) {
                 try {
-                  
                   final chatService =
                       Provider.of<ChatService>(context, listen: false);
                   await chatService.editMessage(message.id, newContent);
@@ -508,14 +509,13 @@ class _ChatScreenState extends State<ChatScreen> {
               _removeMessageLocally(message.id);
 
               try {
-                
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
                 await chatService.deleteMessage(message.id);
               } catch (e) {
                 print('❌ Erro ao excluir mensagem: $e');
                 _showErrorSnackbar('Erro ao excluir mensagem: $e');
-                _loadInitialMessages(); 
+                _loadInitialMessages();
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -539,23 +539,20 @@ class _ChatScreenState extends State<ChatScreen> {
               .map((emoji) => GestureDetector(
                     onTap: () async {
                       try {
-                        
                         final chatService =
                             Provider.of<ChatService>(context, listen: false);
                         final auth =
                             Provider.of<AuthService>(context, listen: false);
                         final userId = auth.currentUser?.id ?? '';
 
-                        
                         await chatService.addReaction(
                           message.id,
                           userId,
                           emoji,
-                          _conversationId, 
+                          _conversationId,
                         );
                         if (!context.mounted) return;
                         Navigator.pop(context);
-                        
                       } catch (e) {
                         _showErrorSnackbar('Erro ao adicionar reação: $e');
                       }
@@ -579,8 +576,8 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remover Reação'),
-        content:
-            Text('Tem certeza que deseja remover sua reação "${reaction.emoji}"?'),
+        content: Text(
+            'Tem certeza que deseja remover sua reação "${reaction.emoji}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -589,7 +586,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ElevatedButton(
             onPressed: () async {
               try {
-                
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
 
@@ -611,15 +607,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    
     _isDisposed = true;
-    
+
     Provider.of<AppStateService>(context, listen: false).setCurrentChat(null);
-    
+
     _messagesSubscription?.cancel();
     _typingSubscription?.cancel();
     _userStatusSubscription?.cancel();
-    _reactionsSubscription?.cancel(); 
+    _reactionsSubscription?.cancel();
     _profilesChannel?.unsubscribe();
     _stopTyping();
     _textController.dispose();
@@ -632,33 +627,39 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
     final userId = auth.currentUser?.id ?? '';
 
-    final otherUserAvatar = _isGroupChat ? null : _participantProfiles[_otherUserId]?['avatar_url'];
+    final otherUserAvatar =
+        _isGroupChat ? null : _participantProfiles[_otherUserId]?['avatar_url'];
 
     return Scaffold(
-
-       // 🔥 Fundo principal do chat
+      // 🔥 Fundo principal do chat
       backgroundColor: const Color(0xFF0D0D0D),
 
       appBar: AppBar(
         iconTheme: const IconThemeData(
-        color: Color(0xFFFF6F4F), // força o botão de voltar para branco
+          color: Color(0xFFFF6F4F), // força o botão de voltar para branco
         ),
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundImage: (otherUserAvatar != null && otherUserAvatar.isNotEmpty)
+              backgroundImage: (otherUserAvatar != null &&
+                      otherUserAvatar.isNotEmpty)
                   ? CachedNetworkImageProvider(otherUserAvatar)
                   : null,
               child: (otherUserAvatar == null || otherUserAvatar.isEmpty)
-                  ? Text(_conversationName.isNotEmpty ? _conversationName[0] : 'C')
+                  ? Text(
+                      _conversationName.isNotEmpty ? _conversationName[0] : 'C')
                   : null,
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_conversationName , style: const TextStyle( color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(_conversationName,
+                    style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
                 if (!_isGroupChat && _isOtherUserOnline && _typingUsers.isEmpty)
                   const Text(
                     'Online',
@@ -678,7 +679,7 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _forceRefreshMessages,
-            color : const Color(0xFFFF6F4F),
+            color: const Color(0xFFFF6F4F),
           ),
         ],
       ),
@@ -693,7 +694,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.chat, size: 64, color: Colors.grey),
+                            const Icon(Icons.chat,
+                                size: 64, color: Colors.grey),
                             const SizedBox(height: 16),
                             const Text(
                               'Nenhuma mensagem ainda',
@@ -701,7 +703,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             const Text(
                               'Seja o primeiro a enviar uma mensagem!',
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12),
                             ),
                             const SizedBox(height: 20),
                             ElevatedButton(
@@ -719,8 +722,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         itemBuilder: (ctx, i) {
                           final message = _messages[i];
                           final isMine = message.senderId == userId;
-                          
-                          final senderAvatarUrl = _participantProfiles[message.senderId]?['avatar_url'];
+
+                          final senderAvatarUrl =
+                              _participantProfiles[message.senderId]
+                                  ?['avatar_url'];
 
                           return GestureDetector(
                             onLongPress: () => _showMessageOptions(message),
@@ -741,29 +746,31 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color (0xFF1A1A1A),
+                color: const Color(0xFF1A1A1A),
                 border: Border(top: BorderSide(color: Colors.grey.shade300)),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     IconButton(
                       onPressed: _pickAndSendImage,
-                      icon: const Icon(Icons.photo_library, color: Color(0xFFFF6F4F)),
+                      icon: const Icon(Icons.photo_library,
+                          color: Color(0xFFFF6F4F)),
                     ),
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color (0xFF1A1A1A),
+                          color: const Color(0xFF1A1A1A),
                           borderRadius: BorderRadius.circular(24),
                         ),
                         child: TextField(
                           controller: _textController,
                           style: const TextStyle(
-                          color: Colors.white, // cor do texto que você digita
-                          fontSize: 16,        // opcional: tamanho do texto
-                        ),
+                            color: Colors.white, // cor do texto que você digita
+                            fontSize: 16, // opcional: tamanho do texto
+                          ),
                           decoration: const InputDecoration(
                             hintText: 'Digite uma mensagem...',
                             border: InputBorder.none,

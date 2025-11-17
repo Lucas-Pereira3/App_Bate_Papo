@@ -7,7 +7,7 @@ import '../../../core/app_routes.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/presence_service.dart';
 import '../../../services/chat_service.dart';
-import '../../../services/app_state_service.dart'; 
+import '../../../services/app_state_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,9 +19,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final SupabaseClient _client = SupabaseConfig.client;
   late Future<List<dynamic>> _conversationsFuture;
-  
+
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
+
   RealtimeChannel? _messagesChannel;
   RealtimeChannel? _profilesChannel;
   bool _isDisposed = false;
@@ -38,12 +38,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _setUserOnline();
     _subscribeToMessages();
     _subscribeToProfileChanges();
-    
+
     // Resetar chat atual ao iniciar Home
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isDisposed) {
-        Provider.of<ChatService>(context, listen: false).addListener(_loadConversations);
-        
+        Provider.of<ChatService>(context, listen: false)
+            .addListener(_loadConversations);
+
         final appState = Provider.of<AppStateService>(context, listen: false);
         appState.setCurrentChat(null);
         print('🏠 HomeScreen iniciada: currentChatId resetado para null');
@@ -56,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Gerenciar presença quando o app volta ao foreground
     if (state == AppLifecycleState.resumed) {
       _setUserOnline();
-      
+
       if (!_isDisposed && mounted) {
         final appState = Provider.of<AppStateService>(context, listen: false);
         appState.setCurrentChat(null);
@@ -65,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  //  Só mostra notificação se NÃO estiver em nenhum chat
+  // Só mostra notificação se NÃO estiver em nenhum chat
   void _subscribeToMessages() {
     _messagesChannel = _client
         .channel('public:messages')
@@ -78,11 +79,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             if (_isDisposed) return;
 
-            _loadConversations();
 
             Future.delayed(Duration.zero, () {
               if (_isDisposed) return;
-              
+
               final scaffoldContext = _scaffoldKey.currentContext;
               if (scaffoldContext == null) {
                 print('⚠️ Contexto do scaffold não disponível');
@@ -98,7 +98,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
               AppStateService? appState;
               try {
-                appState = Provider.of<AppStateService>(scaffoldContext, listen: false);
+                appState =
+                    Provider.of<AppStateService>(scaffoldContext, listen: false);
               } catch (e) {
                 print('⚠️ Erro ao obter AppState: $e');
                 return;
@@ -124,9 +125,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
               if (appState.currentChatId == null) {
                 print('💬 Usuário na Home - Mostrando notificação para: $conversationId');
+                
+                _loadConversations();
+
                 _showMessageSnackbar(scaffoldContext, content, conversationId);
               } else {
-                print('🔇 Usuário já está em um chat (${appState.currentChatId}), ignorando notificação');
+                print(
+                    '🔇 Usuário já está em um chat (${appState.currentChatId}), ignorando notificação');
               }
             });
           },
@@ -134,7 +139,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .subscribe();
   }
 
-  void _showMessageSnackbar(BuildContext context, String content, String conversationId) {
+  void _showMessageSnackbar(
+      BuildContext context, String content, String conversationId) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -147,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 context,
                 RoutesEnum.chat,
                 arguments: {
-                  'conversationId': conversationId, 
+                  'conversationId': conversationId,
                   'conversationName': 'Chat'
                 },
               );
@@ -172,31 +178,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         )
         .subscribe();
   }
-  
+
   @override
   void dispose() {
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
-    
+
     try {
       _messagesChannel?.unsubscribe();
       _profilesChannel?.unsubscribe();
     } catch (e) {
       print('⚠️ Erro ao desinscrever canais: $e');
     }
-    
+
     try {
-      Provider.of<ChatService>(context, listen: false).removeListener(_loadConversations);
+      Provider.of<ChatService>(context, listen: false)
+          .removeListener(_loadConversations);
     } catch (e) {
       print('⚠️ Erro ao remover listener: $e');
     }
-    
+
     super.dispose();
   }
 
   void _setUserOnline() {
     try {
-      final presenceService = Provider.of<PresenceService>(context, listen: false);
+      final presenceService =
+          Provider.of<PresenceService>(context, listen: false);
       presenceService.setUserOnline();
     } catch (e) {
       print('⚠️ Erro ao definir usuário online: $e');
@@ -240,23 +248,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .order('created_at', referencedTable: 'conversations', ascending: false);
 
       var conversations = (response as List<dynamic>);
-          
+
       for (var convData in conversations) {
-        final conv = convData['conversation']; 
+        final conv = convData['conversation'];
         final isGroup = conv['is_group'] == true;
-        
+
         if (!isGroup) {
           final participants = conv['participants'] as List<dynamic>? ?? [];
           final otherParticipant = participants.firstWhere(
             (p) => p['user_id'] != currentUserId,
             orElse: () => null,
           );
-          
+
           if (otherParticipant != null) {
             final profile = otherParticipant['profile'] as Map<String, dynamic>?;
             if (profile != null) {
               conv['name'] = profile['full_name'] ?? 'Chat';
-              conv['avatar_url'] = profile['avatar_url']; 
+              conv['avatar_url'] = profile['avatar_url'];
             }
           }
         }
@@ -265,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       conversations.sort((a, b) {
         final messagesA = a['conversation']['messages'] as List<dynamic>? ?? [];
         final messagesB = b['conversation']['messages'] as List<dynamic>? ?? [];
-        
+
         if (messagesA.isEmpty && messagesB.isEmpty) return 0;
         if (messagesA.isEmpty) return 1;
         if (messagesB.isEmpty) return -1;
@@ -299,16 +307,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                final chatService = Provider.of<ChatService>(context, listen: false);
+                final chatService =
+                    Provider.of<ChatService>(context, listen: false);
                 await chatService.deleteConversation(conversationId);
-                
-                if(!_isDisposed && mounted) {
+
+                if (!_isDisposed && mounted) {
                   _showSnackbar(context, 'Apagado com sucesso!', isError: false);
                   _loadConversations();
                 }
               } catch (e) {
-                if(!_isDisposed && mounted) {
-                   _showSnackbar(context, 'Erro ao apagar: $e');
+                if (!_isDisposed && mounted) {
+                  _showSnackbar(context, 'Erro ao apagar: $e');
                 }
               }
             },
@@ -322,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _createNewConversation(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
-    bool isGroup = true; 
+    bool isGroup = true;
     bool isPublic = true;
 
     showDialog(
@@ -366,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ElevatedButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
-                  
+
                   if (name.isEmpty) {
                     _showSnackbar(context, 'Digite um nome para o grupo');
                     return;
@@ -375,20 +384,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   setDialogState(() {});
 
                   try {
-                    final chatService = Provider.of<ChatService>(context, listen: false);
+                    final chatService =
+                        Provider.of<ChatService>(context, listen: false);
                     final currentUserId = _client.auth.currentUser!.id;
-                    
+
                     await chatService.createConversation(
-                      name, 
-                      isGroup, 
-                      isPublic, 
-                      [currentUserId]
-                    );
+                        name, isGroup, isPublic, [currentUserId]);
                     if (!context.mounted) return;
 
                     Navigator.pop(context);
-                    _loadConversations(); 
-                    _showSnackbar(context, 'Grupo criado com sucesso!', isError: false);
+                    _loadConversations();
+                    _showSnackbar(context, 'Grupo criado com sucesso!',
+                        isError: false);
                   } catch (e) {
                     _showSnackbar(context, 'Erro: $e');
                   }
@@ -402,7 +409,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _showSnackbar(BuildContext context, String message, {bool isError = true}) {
+  void _showSnackbar(BuildContext context, String message,
+      {bool isError = true}) {
     if (!_isDisposed && _scaffoldKey.currentContext != null) {
       ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
         SnackBar(
@@ -417,17 +425,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (isoString == null) return '';
     try {
       final dateUtc = DateTime.parse(isoString);
-      final dateLocal = dateUtc.toLocal(); 
+      final dateLocal = dateUtc.toLocal();
       final now = DateTime.now();
-      
+
       final difference = now.difference(dateLocal);
-      
+
       if (now.day != dateLocal.day || difference.inDays > 0) {
         return '${dateLocal.day}/${dateLocal.month}/${dateLocal.year}';
       } else {
         return '${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
       }
-      
     } catch (e) {
       return '';
     }
@@ -435,15 +442,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   String _getLastMessageText(List<dynamic> messages) {
     if (messages.isEmpty) return 'Nenhuma mensagem';
-    
+
     final lastMessage = messages.last;
     final isDeleted = lastMessage['is_deleted'] == true;
-    
+
     if (isDeleted) return 'Mensagem excluída';
-    
+
     final type = lastMessage['type'] as String?;
     if (type == 'image') return '📷 Imagem';
-    
+
     return lastMessage['content'] ?? 'Mensagem';
   }
 
@@ -453,7 +460,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       key: _scaffoldKey,
       backgroundColor: const Color(0xFF0D0D0D),
       appBar: AppBar(
-        title: const Text('Ratozap', style: TextStyle(color: Color (0xFFFF6F4F)),),
+        title: const Text(
+          'Ratozap',
+          style: TextStyle(color: Color(0xFFFF6F4F)),
+        ),
         backgroundColor: const Color(0xFF0D0D0D),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -472,8 +482,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               _isDisposed = true;
               _messagesChannel?.unsubscribe();
               _profilesChannel?.unsubscribe();
-              
-              final presenceService = Provider.of<PresenceService>(context, listen: false);
+
+              final presenceService =
+                  Provider.of<PresenceService>(context, listen: false);
               presenceService.setUserOffline();
               Provider.of<AuthService>(context, listen: false).signOut();
               Navigator.pushReplacementNamed(context, '/login');
@@ -487,7 +498,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           if (snapshot.hasError) {
             return Center(
               child: Column(
@@ -504,9 +515,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             );
           }
-          
+
           final conversations = snapshot.data ?? [];
-          
+
           if (conversations.isEmpty) {
             return Center(
               child: Column(
@@ -528,7 +539,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             );
           }
-          
+
           return RefreshIndicator(
             onRefresh: _loadConversations,
             child: ListView.separated(
@@ -543,36 +554,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 final convData = conversations[i];
                 final conv = convData['conversation'] as Map<String, dynamic>;
                 final unreadCount = convData['unread_count'] as int;
-                
+
                 final name = conv['name'] ?? 'Chat';
                 final id = conv['id'];
                 final isGroup = conv['is_group'] == true;
-                
+
                 final avatarUrl = conv['avatar_url'] as String?;
-                
+
                 final messages = conv['messages'] as List<dynamic>? ?? [];
                 final lastMessageText = _getLastMessageText(messages);
-                
+
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   leading: CircleAvatar(
-                    radius: 28, 
-                    backgroundColor: isGroup ? const Color(0xFF2E7D32) : Colors.blue,
-                    backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? CachedNetworkImageProvider(avatarUrl)
-                      : null,
+                    radius: 28,
+                    backgroundColor:
+                        isGroup ? const Color(0xFF2E7D32) : Colors.blue,
+                    backgroundImage:
+                        (avatarUrl != null && avatarUrl.isNotEmpty)
+                            ? CachedNetworkImageProvider(avatarUrl)
+                            : null,
                     child: (avatarUrl == null || avatarUrl.isEmpty)
-                      ? Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : 'C',
-                          style: const TextStyle(color: Colors.white, fontSize: 20),
-                        )
-                      : null,
+                        ? Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : 'C',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 20),
+                          )
+                        : null,
                   ),
                   title: Row(
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                            color: Colors.white),
                       ),
                       if (isGroup) ...[
                         const SizedBox(width: 4),
@@ -586,50 +604,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     maxLines: 1,
                     style: const TextStyle(fontSize: 14, color: Colors.white),
                   ),
-                  trailing: messages.isNotEmpty 
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _formatTime(messages.last['created_at']),
-                            style: const TextStyle(color: Colors.grey, fontSize: 12),
-                          ),
-                          
-                          if (unreadCount > 0) ...[
-                            const SizedBox(height: 4),
-                            CircleAvatar(
-                              radius: 10,
-                              backgroundColor: Colors.green,
-                              child: Text(
-                                unreadCount.toString(),
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
-                              ),
+                  trailing: messages.isNotEmpty
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _formatTime(messages.last['created_at']),
+                              style: const TextStyle(
+                                  color: Colors.grey, fontSize: 12),
                             ),
-                          ]
-                        ],
-                      )
-                    : null,
-                    
-                  onTap: () async { 
-                    final appState = Provider.of<AppStateService>(context, listen: false);
+                            if (unreadCount > 0) ...[
+                              const SizedBox(height: 4),
+                              CircleAvatar(
+                                radius: 10,
+                                backgroundColor: Colors.green,
+                                child: Text(
+                                  unreadCount.toString(),
+                                  style: const TextStyle(
+                                      color: Colors.white70, fontSize: 12),
+                                ),
+                              ),
+                            ]
+                          ],
+                        )
+                      : null,
+                  onTap: () async {
+                    final appState =
+                        Provider.of<AppStateService>(context, listen: false);
                     appState.setCurrentChat(id);
                     print('▶️ Entrando no chat: $id');
-                    
-                    await Navigator.pushNamed(
-                      context, 
-                      RoutesEnum.chat, 
-                      arguments: {'conversationId': id, 'conversationName': name}
-                    );
+
+                    await Navigator.pushNamed(context, RoutesEnum.chat,
+                        arguments: {
+                          'conversationId': id,
+                          'conversationName': name
+                        });
 
                     if (!_isDisposed && mounted) {
                       appState.setCurrentChat(null);
-                      print('↩️ Usuário voltou para Home: currentChatId resetado para null');
-                      
-                      _loadConversations(); 
+                      print(
+                          '↩️ Usuário voltou para Home: currentChatId resetado para null');
+
+                      _loadConversations();
                     }
                   },
-                  
                   onLongPress: () {
                     _confirmDelete(id, name, isGroup);
                   },
