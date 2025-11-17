@@ -7,6 +7,7 @@ import '../../../core/app_routes.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/presence_service.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/app_state_service.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,26 +16,57 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final SupabaseClient _client = SupabaseConfig.client;
   late Future<List<dynamic>> _conversationsFuture;
   
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   RealtimeChannel? _messagesChannel;
-  
   RealtimeChannel? _profilesChannel;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeData();
+  }
+
+  void _initializeData() {
     _loadConversations();
     _setUserOnline();
     _subscribeToMessages();
-    _subscribeToProfileChanges(); 
-  }
-  
-  void _subscribeToMessages() {
+    _subscribeToProfileChanges();
     
+    // Resetar chat atual ao iniciar Home
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isDisposed) {
+        Provider.of<ChatService>(context, listen: false).addListener(_loadConversations);
+        
+        final appState = Provider.of<AppStateService>(context, listen: false);
+        appState.setCurrentChat(null);
+        print('🏠 HomeScreen iniciada: currentChatId resetado para null');
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Gerenciar presença quando o app volta ao foreground
+    if (state == AppLifecycleState.resumed) {
+      _setUserOnline();
+      
+      if (!_isDisposed && mounted) {
+        final appState = Provider.of<AppStateService>(context, listen: false);
+        appState.setCurrentChat(null);
+        print('🔄 App retomado: currentChatId resetado');
+      }
+    }
+  }
+
+  //  Só mostra notificação se NÃO estiver em nenhum chat
+  void _subscribeToMessages() {
     _messagesChannel = _client
         .channel('public:messages')
         .onPostgresChanges(
@@ -42,14 +74,90 @@ class _HomeScreenState extends State<HomeScreen> {
           schema: 'public',
           table: 'messages',
           callback: (payload) {
-            print('🔄 Nova mensagem detectada! Recarregando a home...');
-            if (mounted) _loadConversations();
+            print('🔄 Nova mensagem detectada!');
+
+            if (_isDisposed) return;
+
+            _loadConversations();
+
+            Future.delayed(Duration.zero, () {
+              if (_isDisposed) return;
+              
+              final scaffoldContext = _scaffoldKey.currentContext;
+              if (scaffoldContext == null) {
+                print('⚠️ Contexto do scaffold não disponível');
+                return;
+              }
+
+              try {
+                ScaffoldMessenger.of(scaffoldContext);
+              } catch (e) {
+                print('⚠️ Scaffold não disponível: $e');
+                return;
+              }
+
+              AppStateService? appState;
+              try {
+                appState = Provider.of<AppStateService>(scaffoldContext, listen: false);
+              } catch (e) {
+                print('⚠️ Erro ao obter AppState: $e');
+                return;
+              }
+
+              final newMsg = payload.newRecord;
+              final conversationId = newMsg['conversation_id'];
+              final content = newMsg['content'] ?? 'Nova mensagem';
+              final senderId = newMsg['sender_id'];
+
+              // Não mostrar se a mensagem é do próprio usuário
+              final currentUserId = _client.auth.currentUser?.id;
+              if (senderId == currentUserId) {
+                print('📱 Mensagem do próprio usuário, ignorando pop-up');
+                return;
+              }
+
+              // Só mostrar notificação se NÃO estiver em NENHUM chat (currentChatId é null)
+              print('💬 Verificando se deve mostrar notificação:');
+              print('   - Conversation ID: $conversationId');
+              print('   - Current Chat ID: ${appState.currentChatId}');
+              print('   - Usuário em algum chat? ${appState.currentChatId != null}');
+
+              if (appState.currentChatId == null) {
+                print('💬 Usuário na Home - Mostrando notificação para: $conversationId');
+                _showMessageSnackbar(scaffoldContext, content, conversationId);
+              } else {
+                print('🔇 Usuário já está em um chat (${appState.currentChatId}), ignorando notificação');
+              }
+            });
           },
         )
         .subscribe();
   }
 
-  // função para ouvir mudanças de perfil
+  void _showMessageSnackbar(BuildContext context, String content, String conversationId) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Nova mensagem: $content'),
+          action: SnackBarAction(
+            label: 'Ver',
+            onPressed: () {
+              Navigator.pushNamed(
+                context,
+                RoutesEnum.chat,
+                arguments: {
+                  'conversationId': conversationId, 
+                  'conversationName': 'Chat'
+                },
+              );
+            },
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+  }
+
   void _subscribeToProfileChanges() {
     _profilesChannel = _client
         .channel('public:profiles')
@@ -59,8 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
           table: 'profiles',
           callback: (payload) {
             print('🔄 Perfil atualizado detectado! Recarregando conversas...');
-            
-            if (mounted) _loadConversations();
+            if (!_isDisposed) _loadConversations();
           },
         )
         .subscribe();
@@ -68,18 +175,36 @@ class _HomeScreenState extends State<HomeScreen> {
   
   @override
   void dispose() {
-    _messagesChannel?.unsubscribe();
-    _profilesChannel?.unsubscribe(); 
+    _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    
+    try {
+      _messagesChannel?.unsubscribe();
+      _profilesChannel?.unsubscribe();
+    } catch (e) {
+      print('⚠️ Erro ao desinscrever canais: $e');
+    }
+    
+    try {
+      Provider.of<ChatService>(context, listen: false).removeListener(_loadConversations);
+    } catch (e) {
+      print('⚠️ Erro ao remover listener: $e');
+    }
+    
     super.dispose();
   }
 
   void _setUserOnline() {
-    final presenceService = Provider.of<PresenceService>(context, listen: false);
-    presenceService.setUserOnline();
+    try {
+      final presenceService = Provider.of<PresenceService>(context, listen: false);
+      presenceService.setUserOnline();
+    } catch (e) {
+      print('⚠️ Erro ao definir usuário online: $e');
+    }
   }
 
   Future<void> _loadConversations() async {
-    if (mounted) {
+    if (!_isDisposed && mounted) {
       setState(() {
         _conversationsFuture = _fetchConversations();
       });
@@ -94,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final response = await _client
           .from('participants')
           .select('''
+            unread_count, 
             conversation:conversations(
               id,
               name,
@@ -113,11 +239,10 @@ class _HomeScreenState extends State<HomeScreen> {
           .eq('user_id', currentUserId)
           .order('created_at', referencedTable: 'conversations', ascending: false);
 
-      var conversations = (response as List<dynamic>)
-          .map((item) => item['conversation'] as Map<String, dynamic>)
-          .toList();
+      var conversations = (response as List<dynamic>);
           
-      for (var conv in conversations) {
+      for (var convData in conversations) {
+        final conv = convData['conversation']; 
         final isGroup = conv['is_group'] == true;
         
         if (!isGroup) {
@@ -138,8 +263,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       conversations.sort((a, b) {
-        final messagesA = a['messages'] as List<dynamic>? ?? [];
-        final messagesB = b['messages'] as List<dynamic>? ?? [];
+        final messagesA = a['conversation']['messages'] as List<dynamic>? ?? [];
+        final messagesB = b['conversation']['messages'] as List<dynamic>? ?? [];
         
         if (messagesA.isEmpty && messagesB.isEmpty) return 0;
         if (messagesA.isEmpty) return 1;
@@ -177,12 +302,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 final chatService = Provider.of<ChatService>(context, listen: false);
                 await chatService.deleteConversation(conversationId);
                 
-                if(mounted) {
+                if(!_isDisposed && mounted) {
                   _showSnackbar(context, 'Apagado com sucesso!', isError: false);
                   _loadConversations();
                 }
               } catch (e) {
-                if(mounted) {
+                if(!_isDisposed && mounted) {
                    _showSnackbar(context, 'Erro ao apagar: $e');
                 }
               }
@@ -262,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!context.mounted) return;
 
                     Navigator.pop(context);
-                    _loadConversations();
+                    _loadConversations(); 
                     _showSnackbar(context, 'Grupo criado com sucesso!', isError: false);
                   } catch (e) {
                     _showSnackbar(context, 'Erro: $e');
@@ -278,12 +403,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showSnackbar(BuildContext context, String message, {bool isError = true}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
-    );
+    if (!_isDisposed && _scaffoldKey.currentContext != null) {
+      ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.red : Colors.green,
+        ),
+      );
+    }
   }
 
   String _formatTime(String? isoString) {
@@ -323,6 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Ratozap'),
         backgroundColor: Theme.of(context).primaryColor,
@@ -330,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon:const Icon(Icons.search),
+            icon: const Icon(Icons.search),
             onPressed: () => Navigator.pushNamed(context, '/search'),
           ),
           IconButton(
@@ -340,7 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              // 🚀 ATUALIZADO
+              _isDisposed = true;
               _messagesChannel?.unsubscribe();
               _profilesChannel?.unsubscribe();
               
@@ -411,7 +539,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 endIndent: 16,
               ),
               itemBuilder: (ctx, i) {
-                final conv = conversations[i];
+                final convData = conversations[i];
+                final conv = convData['conversation'] as Map<String, dynamic>;
+                final unreadCount = convData['unread_count'] as int;
+                
                 final name = conv['name'] ?? 'Chat';
                 final id = conv['id'];
                 final isGroup = conv['is_group'] == true;
@@ -463,16 +594,41 @@ class _HomeScreenState extends State<HomeScreen> {
                             _formatTime(messages.last['created_at']),
                             style: const TextStyle(color: Colors.grey, fontSize: 12),
                           ),
+                          
+                          if (unreadCount > 0) ...[
+                            const SizedBox(height: 4),
+                            CircleAvatar(
+                              radius: 10,
+                              backgroundColor: Colors.green,
+                              child: Text(
+                                unreadCount.toString(),
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ),
+                          ]
                         ],
                       )
                     : null,
-                  onTap: () {
-                    Navigator.pushNamed(
+                    
+                  onTap: () async { 
+                    final appState = Provider.of<AppStateService>(context, listen: false);
+                    appState.setCurrentChat(id);
+                    print('▶️ Entrando no chat: $id');
+                    
+                    await Navigator.pushNamed(
                       context, 
                       RoutesEnum.chat, 
                       arguments: {'conversationId': id, 'conversationName': name}
                     );
+
+                    if (!_isDisposed && mounted) {
+                      appState.setCurrentChat(null);
+                      print('↩️ Usuário voltou para Home: currentChatId resetado para null');
+                      
+                      _loadConversations(); 
+                    }
                   },
+                  
                   onLongPress: () {
                     _confirmDelete(id, name, isGroup);
                   },

@@ -13,6 +13,26 @@ class ChatService extends ChangeNotifier {
   final _uuid = const Uuid();
 
   StreamSubscription<List<Message>>? _messagesSub;
+  
+  Future<void> markConversationAsRead(String conversationId) async {
+    try {
+      final currentUserId = _client.auth.currentUser!.id;
+      
+      await _client
+        .from('participants')
+        .update({ 'unread_count': 0 }) 
+        .eq('conversation_id', conversationId)
+        .eq('user_id', currentUserId); 
+
+      print('✅ Conversa $conversationId marcada como lida.');
+      
+      // Notifica a HomeScreen para atualizar os contadores
+      notifyListeners();
+      
+    } catch (e) {
+      print('❌ Erro ao marcar conversa como lida: $e');
+    }
+  }
 
   /// Busca mensagens iniciais (ordem: mais novas primeiro)
   Future<List<Message>> fetchMessages(String conversationId) async {
@@ -45,7 +65,6 @@ class ChatService extends ChangeNotifier {
           type = payload?['type']?.toString() ?? 'text';
         }
 
-        // Lê o tipo da mensagem do banco
         if (map.containsKey('type') && map['type'] != null) {
           type = map['type'] as String;
         }
@@ -63,7 +82,6 @@ class ChatService extends ChangeNotifier {
           createdAt = DateTime.now();
         }
 
-        // PROCESSAR REAÇÕES
         List<MessageReaction> reactions = [];
         final reactionsData = map['message_reactions'] as List<dynamic>?;
         if (reactionsData != null) {
@@ -120,7 +138,6 @@ class ChatService extends ChangeNotifier {
             type = payload?['type']?.toString() ?? 'text';
           }
 
-          // Lê o tipo da mensagem do banco
           if (map.containsKey('type') && map['type'] != null) {
             type = map['type'] as String;
           }
@@ -290,7 +307,6 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  // Usa "Soft Delete" 
   Future<void> deleteMessage(String messageId) async {
     try {
       print('🗑️ Marcando mensagem como excluída: $messageId');

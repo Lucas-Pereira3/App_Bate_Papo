@@ -14,6 +14,7 @@ import 'services/profile_service.dart';
 import 'services/presence_service.dart';
 import 'services/search_service.dart';
 import 'services/storage_service.dart';
+import 'services/app_state_service.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PresenceService()),
         Provider(create: (_) => SearchService()),
         Provider(create: (_) => StorageService()),
+        ChangeNotifierProvider(create: (_) => AppStateService()), 
       ],
       child: MaterialApp(
         title: 'Ratozap',
@@ -43,10 +45,10 @@ class MyApp extends StatelessWidget {
           primarySwatch: Colors.blue,
           useMaterial3: true,
         ),
-        home: LoginScreen(),
+        home: const LoginScreen(), 
         debugShowCheckedModeBanner: false,
         routes: {
-          '/login': (_) => LoginScreen(),
+          '/login': (_) => const LoginScreen(), 
           '/register': (_) => RegisterScreen(),
           '/forgot-password': (_) => const ForgotPasswordScreen(),
           '/home': (_) => const HomeScreen(),

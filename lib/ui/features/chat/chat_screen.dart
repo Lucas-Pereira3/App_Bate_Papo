@@ -11,6 +11,7 @@ import '../../../services/profile_service.dart';
 import '../../../ui/widgets/message_bubble.dart';
 import '../../../models/message_model.dart';
 import '../../../core/supabase_config.dart';
+import '../../../services/app_state_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -38,16 +39,26 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription? _userStatusSubscription;
   StreamSubscription? _reactionsSubscription;
   
-  // Canal para ouvir mudanças de perfil
   RealtimeChannel? _profilesChannel;
 
   final Map<String, Map<String, dynamic>> _participantProfiles = {};
   String? _myAvatarUrl;
 
+  bool _isDisposed = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _initializeChat();
+    
+    final args =
+        ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+    final conversationId = args?['conversationId'] ?? '';
+    
+    if (conversationId.isNotEmpty) {
+      Provider.of<AppStateService>(context, listen: false).setCurrentChat(conversationId);
+      Provider.of<ChatService>(context, listen: false).markConversationAsRead(conversationId);
+    }
   }
 
   void _initializeChat() async {
@@ -86,7 +97,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final participantsData = response as List<dynamic>;
       
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         setState(() {
           _participantProfiles.clear();
           for (final item in participantsData) {
@@ -102,9 +113,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final participantIds = participantsData.map((e) => e['user_id'] as String).toList();
 
       if (participantIds.length > 2) {
-        if (mounted) setState(() => _isGroupChat = true);
+        if (!_isDisposed && mounted) setState(() => _isGroupChat = true);
       } else if (participantIds.length == 2) {
-        if (mounted) {
+        if (!_isDisposed && mounted) {
           setState(() {
             _isGroupChat = false;
             _otherUserId =
@@ -112,7 +123,7 @@ class _ChatScreenState extends State<ChatScreen> {
           });
         }
       } else {
-        if (mounted) setState(() => _isGroupChat = false);
+        if (!_isDisposed && mounted) setState(() => _isGroupChat = false);
       }
     } catch (e) {
       print('❌ Erro ao buscar participantes: $e');
@@ -124,7 +135,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _userStatusSubscription?.cancel();
     _userStatusSubscription =
         presenceService.subscribeToUserStatus(_otherUserId).listen((status) {
-      if (mounted) {
+
+      if (!_isDisposed && mounted) {
         setState(() {
           _isOtherUserOnline = status['online'] ?? false;
         });
@@ -144,7 +156,7 @@ class _ChatScreenState extends State<ChatScreen> {
       (data) {
         print('🔄 Reação mudou, recarregando mensagens...');
         
-        if (!_isLoading && mounted) {
+        if (!_isLoading && !_isDisposed && mounted) {
           _loadInitialMessages();
         }
       },
@@ -154,7 +166,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // Função para ouvir mudanças de perfil
   void _subscribeToProfileChanges() {
     _profilesChannel?.unsubscribe(); 
     _profilesChannel = SupabaseConfig.client
@@ -166,20 +177,18 @@ class _ChatScreenState extends State<ChatScreen> {
           callback: (payload) {
             final updatedProfileId = payload.newRecord['id'];
             
-            // Verifica se o perfil atualizado é de alguém nesta conversa
             if (updatedProfileId != null && _participantProfiles.containsKey(updatedProfileId)) {
               print('🔄 Perfil de participante [$updatedProfileId] atualizado!');
               
-              // Recarrega os dados dos participantes (para pegar a nova foto)
               _loadParticipants();
               
-              // Se for o MEU perfil, atualiza a foto localmente
               if (updatedProfileId == SupabaseConfig.client.auth.currentUser?.id) {
-                 if (mounted) {
-                   setState(() {
-                     _myAvatarUrl = payload.newRecord['avatar_url'];
-                   });
-                 }
+                 
+                  if (!_isDisposed && mounted) {
+                    setState(() {
+                      _myAvatarUrl = payload.newRecord['avatar_url'];
+                    });
+                  }
               }
             }
           },
@@ -187,13 +196,13 @@ class _ChatScreenState extends State<ChatScreen> {
         .subscribe();
   }
 
-
   Future<void> _loadInitialMessages() async {
     try {
       final chatService = Provider.of<ChatService>(context, listen: false);
       final messages = await chatService.fetchMessages(_conversationId);
 
-      if (mounted) {
+      
+      if (!_isDisposed && mounted) {
         setState(() {
           _messages = messages;
           _isLoading = false;
@@ -203,7 +212,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
     } catch (e) {
       print('❌ Erro ao carregar mensagens: $e');
-      if (mounted) {
+      
+      if (!_isDisposed && mounted) {
         _showErrorSnackbar('Erro ao carregar mensagens');
         setState(() {
           _isLoading = false;
@@ -220,7 +230,7 @@ class _ChatScreenState extends State<ChatScreen> {
       (newMessages) {
         print('🔄 Subscription de mensagens: ${newMessages.length} mensagens');
         
-        if (mounted) {
+        if (!_isDisposed && mounted) {
           setState(() {
             _messages = newMessages;
           });
@@ -229,7 +239,10 @@ class _ChatScreenState extends State<ChatScreen> {
       },
       onError: (error) {
         print('❌ Erro na subscription de mensagens: $error');
-        _showErrorSnackbar('Erro na conexão em tempo real');
+        
+        if (!_isDisposed && mounted) {
+          _showErrorSnackbar('Erro na conexão em tempo real');
+        }
       },
     );
   }
@@ -243,7 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _typingSubscription =
         presenceService.subscribeToTyping(_conversationId).listen(
       (typingEvents) {
-        if (mounted) {
+        if (!_isDisposed && mounted) {
           setState(() {
             _typingUsers.clear();
             for (final event in typingEvents) {
@@ -279,7 +292,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (_scrollController.hasClients && !_isDisposed) {
         _scrollController.animateTo(
           _scrollController.position.minScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -290,7 +303,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showErrorSnackbar(String message) {
-    if (!mounted) return;
+    
+    if (!mounted) return; 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -301,7 +315,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showSuccessSnackbar(String message) {
-    if (!mounted) return;
+  
+    if (!mounted) return; 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -344,7 +359,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (image != null) {
         final bytes = await image.readAsBytes();
-        if (!mounted) return;
+        
+        if (!mounted) return; 
+
         final chatService = Provider.of<ChatService>(context, listen: false);
         final auth = Provider.of<AuthService>(context, listen: false);
         final userId = auth.currentUser?.id ?? '';
@@ -365,9 +382,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _removeMessageLocally(String messageId) {
-    setState(() {
-      _messages.removeWhere((message) => message.id == messageId);
-    });
+    
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _messages.removeWhere((message) => message.id == messageId);
+      });
+    }
   }
 
   Future<void> _forceRefreshMessages() async {
@@ -450,7 +470,7 @@ class _ChatScreenState extends State<ChatScreen> {
               final newContent = editController.text.trim();
               if (newContent.isNotEmpty && newContent != message.content) {
                 try {
-                  if (!mounted) return;
+                  
                   final chatService =
                       Provider.of<ChatService>(context, listen: false);
                   await chatService.editMessage(message.id, newContent);
@@ -488,7 +508,7 @@ class _ChatScreenState extends State<ChatScreen> {
               _removeMessageLocally(message.id);
 
               try {
-                if (!mounted) return;
+                
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
                 await chatService.deleteMessage(message.id);
@@ -519,7 +539,7 @@ class _ChatScreenState extends State<ChatScreen> {
               .map((emoji) => GestureDetector(
                     onTap: () async {
                       try {
-                        if (!mounted) return;
+                        
                         final chatService =
                             Provider.of<ChatService>(context, listen: false);
                         final auth =
@@ -535,7 +555,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         );
                         if (!context.mounted) return;
                         Navigator.pop(context);
-                       
+                        
                       } catch (e) {
                         _showErrorSnackbar('Erro ao adicionar reação: $e');
                       }
@@ -569,7 +589,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ElevatedButton(
             onPressed: () async {
               try {
-                if (!mounted) return;
+                
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
 
@@ -591,6 +611,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    
+    _isDisposed = true;
+    
+    Provider.of<AppStateService>(context, listen: false).setCurrentChat(null);
+    
     _messagesSubscription?.cancel();
     _typingSubscription?.cancel();
     _userStatusSubscription?.cancel();
@@ -634,7 +659,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 if (_typingUsers.isNotEmpty)
                   const Text(
-                    'digitando...', 
+                    'digitando...',
                     style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
               ],
