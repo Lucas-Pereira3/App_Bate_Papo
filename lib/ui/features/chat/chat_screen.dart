@@ -24,8 +24,18 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
-  StreamSubscription<List<Message>>? _messagesSubscription;
+  
   StreamSubscription<List<Map<String, dynamic>>>? _typingSubscription;
+  StreamSubscription<Message>? _newMessageSubscription; 
+  StreamSubscription<Message>? _updatedMessageSubscription;
+  StreamSubscription? _userStatusSubscription;
+  
+  RealtimeChannel? _reactionsChannel; 
+  
+
+  bool _isLoadingMore = false; 
+  int _currentOffset = 0; 
+
   List<Message> _messages = [];
   String _conversationId = '';
   bool _isLoading = true;
@@ -36,8 +46,6 @@ class _ChatScreenState extends State<ChatScreen> {
   String _otherUserId = '';
   bool _isGroupChat = false;
   bool _isOtherUserOnline = false;
-  StreamSubscription? _userStatusSubscription;
-  StreamSubscription? _reactionsSubscription;
 
   RealtimeChannel? _profilesChannel;
 
@@ -49,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _scrollController.addListener(_onScroll);
     _initializeChat();
 
     final args =
@@ -63,6 +72,42 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Listener do Scroll para Paginação (Infinite Scrolling)
+  void _onScroll() async {
+    if (!_isLoadingMore && _scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+      print('🔼 Chegou ao topo! Carregando mais mensagens...');
+      if (!_isDisposed && mounted) {
+        setState(() {
+          _isLoadingMore = true;
+          _currentOffset += ChatService.messagePageSize; 
+        });
+      }
+
+      try {
+        final chatService = Provider.of<ChatService>(context, listen: false);
+        final moreMessages = await chatService.fetchMessages(_conversationId, offset: _currentOffset);
+
+        if (moreMessages.isNotEmpty) {
+          if (!_isDisposed && mounted) {
+            setState(() {
+              _messages.addAll(moreMessages); 
+            });
+          }
+        } else {
+          print('ℹ️ Não há mais mensagens antigas para carregar.');
+        }
+      } catch (e) {
+        print('❌ Erro ao carregar mais mensagens: $e');
+      } finally {
+        if (!_isDisposed && mounted) {
+          setState(() {
+            _isLoadingMore = false;
+          });
+        }
+      }
+    }
+  }
+
   void _initializeChat() async {
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
@@ -74,14 +119,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (_conversationId.isNotEmpty) {
       await _loadParticipants();
-      await _loadInitialMessages();
-      _subscribeToMessages();
-      _subscribeToTyping();
-      _subscribeToReactions();
-      _subscribeToProfileChanges();
+      await _loadInitialMessages(); 
+      _subscribeToMessages(); 
+      _subscribeToTyping(); 
+      _subscribeToReactions(); 
+      _subscribeToProfileChanges(); 
 
       if (!_isGroupChat && _otherUserId.isNotEmpty) {
-        _subscribeToUserStatus();
+        _subscribeToUserStatus(); 
       }
     }
   }
@@ -146,26 +191,77 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// Assinatura de Reações OTIMIZADA
   void _subscribeToReactions() {
     final client = SupabaseConfig.client;
-    _reactionsSubscription?.cancel();
+    
+    _reactionsChannel?.unsubscribe();
+    
+    _reactionsChannel = client
+   
+        .channel('public:message_reactions:conv=$_conversationId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all, 
+          schema: 'public',
+          table: 'message_reactions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: _conversationId,
+          ),
+          callback: (payload) {
+            print('🔄 Reação mudou [${payload.eventType}]');
 
-    _reactionsSubscription = client
-        .from('message_reactions')
-        .stream(primaryKey: ['id'])
-        .eq('conversation_id', _conversationId)
-        .listen(
-          (data) {
-            print('🔄 Reação mudou, recarregando mensagens...');
+            if (_isLoading || _isDisposed || !mounted) return;
 
-            if (!_isLoading && !_isDisposed && mounted) {
-              _loadInitialMessages();
+            String? messageId;
+            Map<String, dynamic>? record;
+
+            if (payload.eventType == PostgresChangeEvent.delete) {
+              record = payload.oldRecord;
+              messageId = record?['message_id'];
+            } else {
+              record = payload.newRecord;
+              messageId = record?['message_id'];
+            }
+
+            if (messageId == null) {
+              print('⚠️ Não foi possível identificar o messageId da reação.');
+              return;
+            }
+
+            final index = _messages.indexWhere((m) => m.id == messageId);
+
+            if (index != -1) {
+              print('🔄 Atualizando reações SÓ da mensagem $messageId');
+              List<MessageReaction> currentReactions = List.from(_messages[index].reactions);
+
+              if (payload.eventType == PostgresChangeEvent.insert) {
+                currentReactions.add(MessageReaction.fromMap(payload.newRecord));
+              } 
+              else if (payload.eventType == PostgresChangeEvent.delete) {
+                final reactionId = payload.oldRecord?['id'];
+                currentReactions.removeWhere((r) => r.id == reactionId);
+              }
+              else if (payload.eventType == PostgresChangeEvent.update) {
+                final reactionId = payload.newRecord['id'];
+                final reactionIndex = currentReactions.indexWhere((r) => r.id == reactionId);
+                if(reactionIndex != -1) {
+                  currentReactions[reactionIndex] = MessageReaction.fromMap(payload.newRecord);
+                }
+              }
+
+              if (!_isDisposed && mounted) {
+                setState(() {
+                  _messages[index] = _messages[index].copyWith(
+                    reactions: currentReactions,
+                  );
+                });
+              }
             }
           },
-          onError: (error) {
-            print('❌ Erro na subscription de reações: $error');
-          },
-        );
+        )
+        .subscribe();
   }
 
   void _subscribeToProfileChanges() {
@@ -182,9 +278,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (updatedProfileId != null &&
                 _participantProfiles.containsKey(updatedProfileId)) {
               print('🔄 Perfil de participante [$updatedProfileId] atualizado!');
-
               _loadParticipants();
-
               if (updatedProfileId ==
                   SupabaseConfig.client.auth.currentUser?.id) {
                 if (!_isDisposed && mounted) {
@@ -202,19 +296,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadInitialMessages() async {
     try {
       final chatService = Provider.of<ChatService>(context, listen: false);
-      final messages = await chatService.fetchMessages(_conversationId);
+      _currentOffset = 0; 
+      final messages = await chatService.fetchMessages(_conversationId, offset: _currentOffset);
 
       if (!_isDisposed && mounted) {
         setState(() {
-          _messages = messages;
+          _messages = messages; 
           _isLoading = false;
         });
       }
-
       _scrollToBottom();
     } catch (e) {
       print('❌ Erro ao carregar mensagens: $e');
-
       if (!_isDisposed && mounted) {
         _showErrorSnackbar('Erro ao carregar mensagens');
         setState(() {
@@ -224,31 +317,37 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Assinatura de Mensagens OTIMIZADA
   void _subscribeToMessages() {
     final chatService = Provider.of<ChatService>(context, listen: false);
-    _messagesSubscription?.cancel();
+    
+    _newMessageSubscription?.cancel();
+    _updatedMessageSubscription?.cancel();
 
-    _messagesSubscription = chatService.subscribeMessages(_conversationId).listen(
-      (newMessages) {
-        print('🔄 Subscription de mensagens: ${newMessages.length} mensagens');
+    chatService.listenToMessages(_conversationId); 
 
-        if (!_isDisposed && mounted) {
+    _newMessageSubscription = chatService.newMessageStream.listen((newMessage) {
+      print('🔄 Nova mensagem recebida na TELA');
+      if (!_isDisposed && mounted) {
+        setState(() {
+          _messages.insert(0, newMessage); 
+        });
+        chatService.markConversationAsRead(_conversationId);
+      }
+      _scrollToBottom();
+    });
+
+    _updatedMessageSubscription = chatService.updatedMessageStream.listen((updatedMessage) {
+      print('🔄 Mensagem atualizada recebida na TELA');
+      if (!_isDisposed && mounted) {
+        final index = _messages.indexWhere((m) => m.id == updatedMessage.id);
+        if (index != -1) {
           setState(() {
-            _messages = newMessages;
+            _messages[index] = updatedMessage;
           });
-          
-          chatService.markConversationAsRead(_conversationId);
         }
-        _scrollToBottom();
-      },
-      onError: (error) {
-        print('❌ Erro na subscription de mensagens: $error');
-
-        if (!_isDisposed && mounted) {
-          _showErrorSnackbar('Erro na conexão em tempo real');
-        }
-      },
-    );
+      }
+    });
   }
 
   void _subscribeToTyping() {
@@ -256,7 +355,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
     final currentUserId = auth.currentUser?.id ?? '';
 
-    _typingSubscription?.cancel();
+    _typingSubscription?.cancel(); 
     _typingSubscription =
         presenceService.subscribeToTyping(_conversationId).listen(
       (typingEvents) {
@@ -297,7 +396,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients && !_isDisposed) {
+      if (_scrollController.hasClients && !_isDisposed && _scrollController.position.pixels != _scrollController.position.minScrollExtent) {
         _scrollController.animateTo(
           _scrollController.position.minScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -362,18 +461,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (image != null) {
         final bytes = await image.readAsBytes();
-
         if (!mounted) return;
-
         final chatService = Provider.of<ChatService>(context, listen: false);
         final auth = Provider.of<AuthService>(context, listen: false);
         final userId = auth.currentUser?.id ?? '';
-
         if (userId.isEmpty || _conversationId.isEmpty) {
           _showErrorSnackbar('Erro: usuário ou conversa não encontrada');
           return;
         }
-
         await chatService.sendImageMessage(
             _conversationId, userId, bytes, image.name);
         _showSuccessSnackbar('Imagem enviada!');
@@ -393,7 +488,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _forceRefreshMessages() async {
-    _messagesSubscription?.cancel();
+    _newMessageSubscription?.cancel();
+    _updatedMessageSubscription?.cancel();
     await _loadInitialMessages();
     _subscribeToMessages();
   }
@@ -483,7 +579,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   final chatService =
                       Provider.of<ChatService>(context, listen: false);
                   await chatService.editMessage(message.id, newContent);
-
                   if (!context.mounted) return;
                   Navigator.pop(context);
                   _showSuccessSnackbar('Mensagem editada');
@@ -516,8 +611,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              _removeMessageLocally(message.id);
-
               try {
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
@@ -525,7 +618,7 @@ class _ChatScreenState extends State<ChatScreen> {
               } catch (e) {
                 print('❌ Erro ao excluir mensagem: $e');
                 _showErrorSnackbar('Erro ao excluir mensagem: $e');
-                _loadInitialMessages();
+                _loadInitialMessages(); 
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color (0xFFFF6F4F)),
@@ -555,7 +648,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         final auth =
                             Provider.of<AuthService>(context, listen: false);
                         final userId = auth.currentUser?.id ?? '';
-
                         await chatService.addReaction(
                           message.id,
                           userId,
@@ -600,9 +692,7 @@ class _ChatScreenState extends State<ChatScreen> {
               try {
                 final chatService =
                     Provider.of<ChatService>(context, listen: false);
-
                 await chatService.removeReaction(reaction.id);
-
                 if (!context.mounted) return;
                 Navigator.pop(context);
               } catch (e) {
@@ -620,14 +710,19 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _isDisposed = true;
-
     Provider.of<AppStateService>(context, listen: false).setCurrentChat(null);
 
-    _messagesSubscription?.cancel();
-    _typingSubscription?.cancel();
+    // Limpa todas as inscrições
+    _newMessageSubscription?.cancel();
+    _updatedMessageSubscription?.cancel();
+    _typingSubscription?.cancel(); 
     _userStatusSubscription?.cancel();
-    _reactionsSubscription?.cancel();
+    
+    _reactionsChannel?.unsubscribe(); 
     _profilesChannel?.unsubscribe();
+    
+    Provider.of<ChatService>(context, listen: false).stopListeningToMessages();
+    
     _stopTyping();
     _textController.dispose();
     _scrollController.dispose();
@@ -643,12 +738,10 @@ class _ChatScreenState extends State<ChatScreen> {
         _isGroupChat ? null : _participantProfiles[_otherUserId]?['avatar_url'];
 
     return Scaffold(
-      // 🔥 Fundo principal do chat
       backgroundColor: const Color(0xFF0D0D0D),
-
       appBar: AppBar(
         iconTheme: const IconThemeData(
-          color: Color(0xFFFF6F4F), // força o botão de voltar para branco
+          color: Color(0xFFFF6F4F), 
         ),
         title: Row(
           children: [
@@ -698,6 +791,11 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+          if (_isLoadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -728,13 +826,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       )
                     : ListView.builder(
                         controller: _scrollController,
-                        reverse: true,
+                        reverse: true, 
                         itemCount: _messages.length,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         itemBuilder: (ctx, i) {
                           final message = _messages[i];
                           final isMine = message.senderId == userId;
-
                           final senderAvatarUrl =
                               _participantProfiles[message.senderId]
                                   ?['avatar_url'];
@@ -748,7 +845,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               senderAvatarUrl: senderAvatarUrl,
                               myAvatarUrl: _myAvatarUrl,
                               onReactionTap: (reaction) {
-                                _removeReaction(reaction);
+                                // Só permite remover se a reação for sua
+                                if(reaction.userId == userId) {
+                                  _removeReaction(reaction);
+                                }
                               },
                             ),
                           );
@@ -780,11 +880,12 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: TextField(
                           controller: _textController,
                           style: const TextStyle(
-                            color: Colors.white, // cor do texto que você digita
-                            fontSize: 16, // opcional: tamanho do texto
+                            color: Colors.white, 
+                            fontSize: 16, 
                           ),
                           decoration: const InputDecoration(
                             hintText: 'Digite uma mensagem...',
+                            hintStyle: TextStyle(color: Colors.white70), // Adicionado
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
