@@ -73,7 +73,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               _isPasswordObscured
                                   ? Icons.visibility_off
                                   : Icons.visibility,
-                              color: Colors.grey[600],
+                              color: _isPasswordObscured
+                                  ?Colors.grey
+                                  :const Color(0xFF00BFFF),
                             ),
                             onPressed: () {
                              

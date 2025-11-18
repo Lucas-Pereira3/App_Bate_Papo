@@ -8,6 +8,7 @@ class CustomInput extends StatelessWidget {
   final TextInputType keyboardType;
   final bool enabled;
   final Widget? suffixIcon; 
+  final TextStyle? hintStyle;
 
   const CustomInput({
     super.key,
@@ -18,6 +19,7 @@ class CustomInput extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.enabled = true,
     this.suffixIcon, 
+    this.hintStyle,
   });
 
   @override
@@ -29,9 +31,11 @@ class CustomInput extends StatelessWidget {
       keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(color: Colors.grey),
         hintText: hint,
+        hintStyle: const TextStyle(color: Colors.grey),
         filled: true,
-        fillColor: Colors.grey[100], 
+        fillColor: Colors.grey[200], 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.0), 
           borderSide: BorderSide.none, 
@@ -43,7 +47,7 @@ class CustomInput extends StatelessWidget {
         focusedBorder: OutlineInputBorder( 
           borderRadius: BorderRadius.circular(12.0),
           borderSide: const BorderSide(
-            color: Color(0xFF424242),
+            color: Color(0xFF00BFFF),
             width: 2.0,
           ),
         ),

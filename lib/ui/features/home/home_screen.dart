@@ -377,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
+                child: const Text('Cancelar',style: TextStyle(color: Colors.white70)),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -407,6 +407,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _showSnackbar(context, 'Erro: $e');
                   }
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6F4F),
+                ),
                 child: const Text('Criar',style: TextStyle(color: Colors.white70)),
               ),
             ],

@@ -132,7 +132,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor:  const Color(0xFF121212),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF121212),
+        foregroundColor: const Color(0xFFFF6F00),
         title: const Text('Editar Perfil'),
         actions: [
           if (_isInitialized)
@@ -144,7 +147,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.save),
+                  : const Icon(Icons.save,color : Color(0xFF00BFFF),),
             ),
         ],
       ),
@@ -176,7 +179,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: const BoxDecoration(
-                              color: Colors.blue,
+                              color: Color(0xFF00BFFF),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
@@ -191,20 +194,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     onPressed: _removeImage,
                     child: const Text(
                       'Remover foto',
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(color: Color(0xFFFF073A)),
                     ),
                   ),
                   
                   const SizedBox(height: 12), 
                   
-                  TextFormField(
+                 TextFormField(
                     initialValue: Provider.of<ProfileService>(context).currentProfile?['email'] ?? 
                                   Provider.of<AuthService>(context).currentUser?.email ?? '',
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Email',
-                      border: const OutlineInputBorder(),
+                      labelStyle: TextStyle(color: Color(0xFF00BFFF)),
+                      border:  OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      borderSide: BorderSide(
+                        color: Color(0xFF00BFFF), // Cor Laranja
+                        width: 2.0, // Espessura de destaque
+                      ),
+                    ),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: Colors.white,
                     ),
                     readOnly: true,
                   ),
@@ -213,8 +224,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: 'Nome completo',
+                      labelStyle: TextStyle(color: Color(0xFF00BFFF),fontSize: 16,fontWeight: FontWeight.bold),
                       border: OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      borderSide: BorderSide(
+                        color: Color(0xFF00BFFF), // Cor Laranja
+                        width: 2.0, // Espessura de destaque
+                      ),
+                    ),
                       hintText: 'Digite seu nome completo',
+                      filled: true,
+                      fillColor: Colors.white,
                     ),
                   ),
                  const SizedBox(height: 24),

@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 class CustomTextButton extends StatelessWidget {
   final String buttonText;
   final VoidCallback buttonAction;
-
+  final Color? textColor;
   const CustomTextButton({
     super.key,
+    this.textColor,
     required this.buttonText,
     required this.buttonAction,
   });
@@ -15,7 +16,7 @@ class CustomTextButton extends StatelessWidget {
     return TextButton(
       onPressed: buttonAction,
       style: TextButton.styleFrom(
-        foregroundColor: Colors.grey[700], // Cor mais suave
+        foregroundColor: textColor ?? const Color(0xFF00BFFF), // Cor mais suave
       ),
       child: Text(
         buttonText,
