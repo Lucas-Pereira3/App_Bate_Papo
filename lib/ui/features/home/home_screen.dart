@@ -294,14 +294,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isGroup ? 'Excluir Grupo' : 'Excluir Conversa'),
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: Text(isGroup ? 'Excluir Grupo' : 'Excluir Conversa',style: const TextStyle(color: Color(0xFFFF6F4F)),),
         content: Text(
             'Tem certeza que deseja apagar "$name"?\n'
-            'Essa ação não pode ser desfeita.'),
+            'Essa ação não pode ser desfeita.',style: const TextStyle(color: Colors.white70),),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar',style: TextStyle(color: Colors.white70)),
           ),
           TextButton(
             onPressed: () async {

@@ -205,7 +205,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   Provider.of<AuthService>(context).currentUser?.email ?? '',
                     decoration: const InputDecoration(
                       labelText: 'Email',
-                      labelStyle: TextStyle(color: Color(0xFF00BFFF)),
+                      labelStyle: TextStyle(color: Color(0xFF00BFFF),fontSize: 16,fontWeight: FontWeight.bold),
                       border:  OutlineInputBorder(),
                       focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(8)),
