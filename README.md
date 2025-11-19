@@ -14,3 +14,9 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Participantes
+Nome: Pedro Henrique Bernardo Marques RA:179427-2024 
+Nome: Lucas da Silva Pereira RA:145716-2023 
+Nome: João victor Fernandes Felix RA:176448-2024 
+Nome: Jhonatan RA:156801-2023 
